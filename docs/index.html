@@ -706,6 +706,29 @@ function excelSheetToRows(workbook, sheetName) {
   return XLSX.utils.sheet_to_json(sheet, { defval: null, raw: true });
 }
 
+async function loadWorkbookFromBuffer(buf, sourceLabel) {
+  const statusEl = document.getElementById('timelineFileStatus');
+  const workbook = XLSX.read(buf, { type: 'array', cellDates: true });
+
+  factRows = excelSheetToRows(workbook, 'Fact Table');
+  dimRows = excelSheetToRows(workbook, 'Dim Table');
+
+  if (!dimRows.length) {
+    throw new Error('No "Dim Table" sheet found (or it\'s empty) in this file.');
+  }
+
+  buildTimeline();
+  renderUpcomingForPO();
+  renderStageGaps();
+  statusEl.textContent = `Loaded ${factRows.length} report rows, ${dimRows.length} timeline rows from ${sourceLabel}.`;
+  statusEl.classList.remove('error');
+  document.getElementById('drilldownContainer').style.display = 'none';
+  document.getElementById('thresholdRow').style.display = 'flex';
+  document.getElementById('thresholdRow2').style.display = 'flex';
+  document.getElementById('upcomingContainer').style.display = 'block';
+  document.getElementById('gapsContainer').style.display = 'block';
+}
+
 document.getElementById('timelineFileInput').addEventListener('change', async (e) => {
   const file = e.target.files[0];
   const statusEl = document.getElementById('timelineFileStatus');
@@ -714,29 +737,28 @@ document.getElementById('timelineFileInput').addEventListener('change', async (e
   statusEl.classList.remove('error');
   try {
     const buf = await file.arrayBuffer();
-    const workbook = XLSX.read(buf, { type: 'array', cellDates: true });
-
-    factRows = excelSheetToRows(workbook, 'Fact Table');
-    dimRows = excelSheetToRows(workbook, 'Dim Table');
-
-    if (!dimRows.length) {
-      throw new Error('No "Dim Table" sheet found (or it\'s empty) in this file.');
-    }
-
-    buildTimeline();
-    renderUpcomingForPO();
-    renderStageGaps();
-    statusEl.textContent = `Loaded ${factRows.length} report rows, ${dimRows.length} timeline rows from ${file.name}.`;
-    document.getElementById('drilldownContainer').style.display = 'none';
-    document.getElementById('thresholdRow').style.display = 'flex';
-    document.getElementById('thresholdRow2').style.display = 'flex';
-    document.getElementById('upcomingContainer').style.display = 'block';
-    document.getElementById('gapsContainer').style.display = 'block';
+    await loadWorkbookFromBuffer(buf, file.name);
   } catch (err) {
     statusEl.textContent = 'Error: ' + err.message;
     statusEl.classList.add('error');
   }
 });
+
+// Auto-load a default workbook (data/Template.xlsx, alongside this page) on
+// startup if one is present, so the dashboard shows data immediately without
+// requiring a manual upload. Uploading a file at any time still overrides it.
+async function tryAutoLoadDefaultWorkbook() {
+  const statusEl = document.getElementById('timelineFileStatus');
+  try {
+    const res = await fetch('data/Template.xlsx', { cache: 'no-store' });
+    if (!res.ok) return;
+    const buf = await res.arrayBuffer();
+    await loadWorkbookFromBuffer(buf, 'Template.xlsx (auto-loaded)');
+  } catch (err) {
+    // No default file available (or not served) — that's fine, manual upload still works.
+  }
+}
+tryAutoLoadDefaultWorkbook();
 
 document.getElementById('nearDaysInput').addEventListener('change', () => {
   if (dimRows.length) buildTimeline();

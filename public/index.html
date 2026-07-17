@@ -201,6 +201,7 @@
   table.timeline tr.total-row td { background: var(--panel-2); font-weight: 700; color: var(--text); }
   table.timeline td.risk-overdue { background: #f28b82; color: #3a0a06; }
   table.timeline td.risk-near { background: #fbc02d; color: #3a2c00; }
+  .missing-flag { color: #3a0a06; font-weight: 900; margin-left: 3px; }
 
   .threshold-label {
     font-size: 12px;
@@ -267,6 +268,10 @@
 
 <div id="jiraPanel">
 
+<div class="notice-banner" style="background:#fff8e1; border:1px solid #fbc02d; color:#3a2c00; padding:10px 14px; border-radius:6px; margin-bottom:14px; font-size:14px;">
+  <strong>Not yet available:</strong> Jira integration is still pending IT/admin approval and isn't active on this hosted version. Please check back later — in the meantime, the Migration Timeline tab is fully functional.
+</div>
+
 <div id="connectGate" class="connect-gate" style="display:none">
   <p>This dashboard isn't connected to Jira yet. Click below to sign in and authorize access to your Jira site.</p>
   <a class="connect-btn" href="/oauth/login">Connect to Jira</a>
@@ -313,10 +318,15 @@
   <div class="upload-row" id="thresholdRow" style="display:none; padding-top:0;">
     <label class="threshold-label">Near-release warning within <input type="number" id="nearDaysInput" value="14" min="1" class="threshold-input" /> days</label>
     <label class="threshold-label">"Coming your way" window: next <input type="number" id="upcomingDaysInput" value="30" min="1" class="threshold-input" /> days</label>
+  </div>
+  <div class="upload-row" id="thresholdRow2" style="display:none; padding-top:0;">
+    <label class="threshold-label">Timeline: overdue &#8805; <input type="number" id="overdueAmberDaysInput" value="2" min="1" class="threshold-input" /> days &rarr; amber</label>
+    <label class="threshold-label">Timeline: overdue &#8805; <input type="number" id="overdueRedDaysInput" value="10" min="1" class="threshold-input" /> days &rarr; red</label>
     <div class="legend">
-      <span class="legend-item"><span class="legend-swatch swatch-overdue"></span>Overdue</span>
-      <span class="legend-item"><span class="legend-swatch swatch-near"></span>Near release</span>
+      <span class="legend-item"><span class="legend-swatch swatch-overdue"></span>Overdue (red threshold)</span>
+      <span class="legend-item"><span class="legend-swatch swatch-near"></span>Overdue (amber threshold)</span>
       <span class="legend-item"><span class="legend-swatch swatch-ok"></span>On track</span>
+      <span class="legend-item"><span class="missing-flag">&#9888;</span>Missing report(s), past months only</span>
     </div>
   </div>
 
@@ -600,6 +610,14 @@ function getUpcomingDays() {
   const v = parseInt(document.getElementById('upcomingDaysInput').value, 10);
   return Number.isFinite(v) && v > 0 ? v : 30;
 }
+function getOverdueAmberDays() {
+  const v = parseInt(document.getElementById('overdueAmberDaysInput').value, 10);
+  return Number.isFinite(v) && v > 0 ? v : 2;
+}
+function getOverdueRedDays() {
+  const v = parseInt(document.getElementById('overdueRedDaysInput').value, 10);
+  return Number.isFinite(v) && v > 0 ? v : 10;
+}
 function daysBetween(a, b) {
   return Math.round((b - a) / (1000 * 60 * 60 * 24));
 }
@@ -607,6 +625,9 @@ function startOfToday() {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
   return d;
+}
+function currentMonthKey(today) {
+  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
 }
 
 function classifyRisk(row, today, nearDays) {
@@ -632,24 +653,80 @@ function riskBadgeHtml(risk) {
   return `<span class="risk-badge ${risk.level}">${risk.label}</span>`;
 }
 
-// Worst risk level found among Fact Table rows for a given domain + month cell
-// (overdue > near > ok), used to color the timeline heatmap cells.
-function computeCellRisk(domain, monthKey, today, nearDays) {
+// Worst risk level found among Fact Table rows for a given domain + month cell,
+// used to color the timeline heatmap cells specifically. Tiered overdue rule
+// only — near-release (not yet due) does NOT contribute to heatmap coloring,
+// only to the drill-down table's Risk badges via classifyRisk():
+//   - overdue >= overdueRedDays   -> 'overdue' (red)
+//   - overdue >= overdueAmberDays -> 'near'     (amber)
+//   - overdue but < overdueAmberDays -> no flag from this report
+//   - not yet due -> no flag (see classifyRisk() for that case)
+function computeCellRisk(domain, monthKey, today, overdueAmberDays, overdueRedDays) {
   let worst = null;
   factRows.forEach((row) => {
     if (row['Domain'] !== domain) return;
     if (monthKeyFromDate(row['Expected Release Date']) !== monthKey) return;
-    const risk = classifyRisk(row, today, nearDays);
-    if (risk.level === 'overdue') worst = 'overdue';
-    else if (risk.level === 'near' && worst !== 'overdue') worst = 'near';
+
+    const actual = row['Actual Release Date'];
+    if (actual instanceof Date && !isNaN(actual)) return; // already released, no flag
+
+    const expected = row['Expected Release Date'];
+    if (!(expected instanceof Date) || isNaN(expected)) return;
+
+    const daysUntil = daysBetween(today, expected); // negative = overdue
+    if (daysUntil >= 0) return; // not yet due — handled only in the drill-down table, not here
+
+    const overdueBy = Math.abs(daysUntil);
+    if (overdueBy >= overdueRedDays) {
+      worst = 'overdue';
+    } else if (overdueBy >= overdueAmberDays && worst !== 'overdue') {
+      worst = 'near';
+    }
+    // overdue by less than overdueAmberDays: not flagged
   });
   return worst;
+}
+
+// How many fewer Fact Table rows exist for this domain + month than the Dim
+// Table's Expected Report Count says there should be — same calculation the
+// drill-down title uses, surfaced directly on the heatmap cell.
+function computeCellMissing(domain, monthKey, expectedCount) {
+  let foundCount = 0;
+  factRows.forEach((row) => {
+    if (row['Domain'] !== domain) return;
+    if (monthKeyFromDate(row['Expected Release Date']) !== monthKey) return;
+    foundCount++;
+  });
+  return Math.max(expectedCount - foundCount, 0);
 }
 
 function excelSheetToRows(workbook, sheetName) {
   const sheet = workbook.Sheets[sheetName];
   if (!sheet) return [];
   return XLSX.utils.sheet_to_json(sheet, { defval: null, raw: true });
+}
+
+async function loadWorkbookFromBuffer(buf, sourceLabel) {
+  const statusEl = document.getElementById('timelineFileStatus');
+  const workbook = XLSX.read(buf, { type: 'array', cellDates: true });
+
+  factRows = excelSheetToRows(workbook, 'Fact Table');
+  dimRows = excelSheetToRows(workbook, 'Dim Table');
+
+  if (!dimRows.length) {
+    throw new Error('No "Dim Table" sheet found (or it\'s empty) in this file.');
+  }
+
+  buildTimeline();
+  renderUpcomingForPO();
+  renderStageGaps();
+  statusEl.textContent = `Loaded ${factRows.length} report rows, ${dimRows.length} timeline rows from ${sourceLabel}.`;
+  statusEl.classList.remove('error');
+  document.getElementById('drilldownContainer').style.display = 'none';
+  document.getElementById('thresholdRow').style.display = 'flex';
+  document.getElementById('thresholdRow2').style.display = 'flex';
+  document.getElementById('upcomingContainer').style.display = 'block';
+  document.getElementById('gapsContainer').style.display = 'block';
 }
 
 document.getElementById('timelineFileInput').addEventListener('change', async (e) => {
@@ -660,34 +737,40 @@ document.getElementById('timelineFileInput').addEventListener('change', async (e
   statusEl.classList.remove('error');
   try {
     const buf = await file.arrayBuffer();
-    const workbook = XLSX.read(buf, { type: 'array', cellDates: true });
-
-    factRows = excelSheetToRows(workbook, 'Fact Table');
-    dimRows = excelSheetToRows(workbook, 'Dim Table');
-
-    if (!dimRows.length) {
-      throw new Error('No "Dim Table" sheet found (or it\'s empty) in this file.');
-    }
-
-    buildTimeline();
-    renderUpcomingForPO();
-    renderStageGaps();
-    statusEl.textContent = `Loaded ${factRows.length} report rows, ${dimRows.length} timeline rows from ${file.name}.`;
-    document.getElementById('drilldownContainer').style.display = 'none';
-    document.getElementById('thresholdRow').style.display = 'flex';
-    document.getElementById('upcomingContainer').style.display = 'block';
-    document.getElementById('gapsContainer').style.display = 'block';
+    await loadWorkbookFromBuffer(buf, file.name);
   } catch (err) {
     statusEl.textContent = 'Error: ' + err.message;
     statusEl.classList.add('error');
   }
 });
 
+// Auto-load a default workbook (data/Template.xlsx, alongside this page) on
+// startup if one is present, so the dashboard shows data immediately without
+// requiring a manual upload. Uploading a file at any time still overrides it.
+async function tryAutoLoadDefaultWorkbook() {
+  const statusEl = document.getElementById('timelineFileStatus');
+  try {
+    const res = await fetch('data/Template.xlsx', { cache: 'no-store' });
+    if (!res.ok) return;
+    const buf = await res.arrayBuffer();
+    await loadWorkbookFromBuffer(buf, 'Template.xlsx (auto-loaded)');
+  } catch (err) {
+    // No default file available (or not served) — that's fine, manual upload still works.
+  }
+}
+tryAutoLoadDefaultWorkbook();
+
 document.getElementById('nearDaysInput').addEventListener('change', () => {
   if (dimRows.length) buildTimeline();
 });
 document.getElementById('upcomingDaysInput').addEventListener('change', () => {
   if (factRows.length) renderUpcomingForPO();
+});
+document.getElementById('overdueAmberDaysInput').addEventListener('change', () => {
+  if (dimRows.length) buildTimeline();
+});
+document.getElementById('overdueRedDaysInput').addEventListener('change', () => {
+  if (dimRows.length) buildTimeline();
 });
 
 function buildTimeline() {
@@ -741,7 +824,9 @@ function renderTimelineTable(domainOrder, domainCounts) {
   monthKeys.forEach((k) => (monthTotals[k] = 0));
 
   const today = startOfToday();
-  const nearDays = getNearDays();
+  const overdueAmberDays = getOverdueAmberDays();
+  const overdueRedDays = getOverdueRedDays();
+  const thisMonthKey = currentMonthKey(today);
 
   domainOrder.forEach((domain) => {
     const tr = document.createElement('tr');
@@ -754,9 +839,21 @@ function renderTimelineTable(domainOrder, domainCounts) {
       const val = counts[k];
       if (val) {
         monthTotals[k] += val;
-        const risk = computeCellRisk(domain, k, today, nearDays);
-        const riskClass = risk === 'overdue' ? ' risk-overdue' : risk === 'near' ? ' risk-near' : '';
-        rowHtml += `<td class="count-cell${riskClass}" data-domain="${encodeURIComponent(domain)}" data-month="${k}">${val}</td>`;
+        const risk = computeCellRisk(domain, k, today, overdueAmberDays, overdueRedDays);
+
+        // Missing-report flagging only applies to months strictly before the
+        // current month — a month that hasn't finished yet (or hasn't started)
+        // can't fairly be judged as "missing" reports.
+        const isPastMonth = k < thisMonthKey;
+        const missing = isPastMonth ? computeCellMissing(domain, k, val) : 0;
+        const isMissingFlagged = missing > 0;
+
+        // Missing reports (past months) and overdue-by-redDays both render as
+        // red fill; overdue-by-amberDays renders amber.
+        const riskClass = (risk === 'overdue' || isMissingFlagged) ? ' risk-overdue' : risk === 'near' ? ' risk-near' : '';
+        const missingFlag = isMissingFlagged ? `<span class="missing-flag" title="${missing} report(s) missing vs. Dim Table (past month)">&#9888;</span>` : '';
+        const titleAttr = isMissingFlagged ? ` title="${missing} report(s) missing vs. Dim Table (past month)"` : '';
+        rowHtml += `<td class="count-cell${riskClass}" data-domain="${encodeURIComponent(domain)}" data-month="${k}"${titleAttr}>${val}${missingFlag}</td>`;
       } else {
         rowHtml += '<td class="empty-cell">·</td>';
       }
