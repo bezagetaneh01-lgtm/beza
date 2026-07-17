@@ -1,0 +1,18 @@
+{
+  "name": "jira-migration-dashboard",
+  "version": "1.0.0",
+  "description": "Dashboard for tracking ODS -> Snowflake migration status of Jira tickets, with read + write-back to Jira.",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "dotenv": "^16.4.5"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

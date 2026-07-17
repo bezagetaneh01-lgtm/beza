@@ -1,0 +1,1017 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ODS &rarr; Snowflake Migration Dashboard</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --panel: #1e293b;
+    --panel-2: #273449;
+    --border: #334155;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --accent: #38bdf8;
+    --green: #22c55e;
+    --amber: #f59e0b;
+    --red: #ef4444;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  header {
+    padding: 20px 28px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  h1 { font-size: 18px; margin: 0; font-weight: 600; }
+  .sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .toolbar {
+    display: flex;
+    gap: 10px;
+    padding: 16px 28px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  input[type="text"] {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    min-width: 320px;
+    flex: 1;
+  }
+  button {
+    background: var(--accent);
+    color: #052;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    color: #0b1120;
+  }
+  button:hover { opacity: 0.9; }
+  button.secondary {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .summary {
+    display: flex;
+    gap: 12px;
+    padding: 0 28px 16px;
+    flex-wrap: wrap;
+  }
+  .chip {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-size: 13px;
+  }
+  .chip b { display: block; font-size: 18px; margin-top: 2px; }
+  main { padding: 0 28px 40px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  th { color: var(--muted); font-weight: 600; position: sticky; top: 0; background: var(--bg); }
+  tr:hover { background: rgba(255,255,255,0.02); }
+  a.key { color: var(--accent); text-decoration: none; font-weight: 600; }
+  a.key:hover { text-decoration: underline; }
+  select.status-edit {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 5px 8px;
+    border-radius: 5px;
+    font-size: 12px;
+  }
+  .badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+  }
+  .msg { color: var(--muted); padding: 20px 28px; font-size: 13px; }
+  .error { color: var(--red); }
+  .save-status { font-size: 11px; margin-left: 6px; color: var(--muted); }
+  .connect-gate {
+    margin: 40px 28px;
+    padding: 24px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    max-width: 480px;
+  }
+  .connect-gate p { color: var(--muted); font-size: 13px; line-height: 1.5; }
+  .connect-btn {
+    display: inline-block;
+    background: var(--accent);
+    color: #0b1120;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    margin-top: 8px;
+  }
+  .site-badge { color: var(--muted); font-size: 12px; padding: 0 28px 8px; }
+
+  .tabs {
+    display: flex;
+    gap: 4px;
+    padding: 0 28px;
+    border-bottom: 1px solid var(--border);
+  }
+  .tab-btn {
+    background: transparent;
+    color: var(--muted);
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    padding: 12px 16px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .tab-btn.active {
+    color: var(--text);
+    border-bottom-color: var(--accent);
+  }
+  .tab-btn:hover { opacity: 1; color: var(--text); }
+
+  .upload-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 20px 28px;
+    flex-wrap: wrap;
+  }
+  input[type="file"] {
+    color: var(--text);
+    font-size: 13px;
+  }
+  .timeline-wrap { padding: 0 28px 40px; overflow-x: auto; }
+  table.timeline { border-collapse: collapse; font-size: 12px; min-width: 900px; }
+  table.timeline th, table.timeline td {
+    padding: 8px 10px;
+    text-align: center;
+    border: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  table.timeline th.domain-col, table.timeline td.domain-col {
+    text-align: left;
+    position: sticky;
+    left: 0;
+    background: var(--bg);
+    min-width: 220px;
+  }
+  table.timeline thead th {
+    background: #2e75b6;
+    color: #fff;
+    font-weight: 600;
+  }
+  table.timeline td.count-cell {
+    background: #c0e6f5;
+    color: #0b1120;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  table.timeline td.count-cell:hover { filter: brightness(1.15); }
+  table.timeline td.empty-cell { background: #22304a; color: transparent; }
+  table.timeline tr.total-row td { background: var(--panel-2); font-weight: 700; color: var(--text); }
+  table.timeline td.risk-overdue { background: #f28b82; color: #3a0a06; }
+  table.timeline td.risk-near { background: #fbc02d; color: #3a2c00; }
+
+  .threshold-label {
+    font-size: 12px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .threshold-input {
+    width: 56px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 5px 8px;
+    border-radius: 5px;
+    font-size: 12px;
+  }
+  .legend { display: flex; gap: 14px; margin-left: auto; }
+  .legend-item { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .legend-swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .swatch-overdue { background: #f28b82; }
+  .swatch-near { background: #fbc02d; }
+  .swatch-ok { background: #c0e6f5; }
+
+  .risk-badge { padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+  .risk-badge.overdue { background: #f28b82; color: #3a0a06; }
+  .risk-badge.near { background: #fbc02d; color: #3a2c00; }
+  .risk-badge.ontrack { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); }
+  .risk-badge.released { background: var(--green); color: #06280f; }
+
+  .upcoming-sub { color: var(--muted); font-size: 12px; margin: -4px 0 14px; }
+
+  .drilldown {
+    margin: 0 28px 40px;
+    padding: 20px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .drilldown h3 { margin: 0 0 12px; font-size: 14px; }
+  .drilldown table { font-size: 12px; }
+  .close-drilldown {
+    float: right;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 4px 10px;
+    font-size: 12px;
+  }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>ODS &rarr; Snowflake Migration Dashboard</h1>
+    <div class="sub">Live view of Jira tickets tracking database migration status</div>
+  </div>
+</header>
+
+<div class="tabs">
+  <button class="tab-btn active" id="tabJiraBtn">Jira Tickets</button>
+  <button class="tab-btn" id="tabTimelineBtn">Migration Timeline</button>
+</div>
+
+<div id="jiraPanel">
+
+<div id="connectGate" class="connect-gate" style="display:none">
+  <p>This dashboard isn't connected to Jira yet. Click below to sign in and authorize access to your Jira site.</p>
+  <a class="connect-btn" href="/oauth/login">Connect to Jira</a>
+</div>
+
+<div id="siteBadge" class="site-badge" style="display:none"></div>
+
+<div id="mainUi" style="display:none">
+<div class="toolbar">
+  <input type="text" id="jqlInput" placeholder="JQL, e.g. project = MIG ORDER BY updated DESC" />
+  <button id="runBtn">Run</button>
+  <button class="secondary" id="refreshBtn">Refresh</button>
+</div>
+
+<div class="summary" id="summary"></div>
+
+<div class="msg" id="msg"></div>
+
+<main>
+  <table id="table" style="display:none">
+    <thead>
+      <tr>
+        <th>Key</th>
+        <th>Summary</th>
+        <th>Assignee</th>
+        <th>Jira Status</th>
+        <th>Migration Status</th>
+        <th>Updated</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+</main>
+</div>
+
+</div>
+
+<div id="timelinePanel" style="display:none">
+  <div class="upload-row">
+    <input type="file" id="timelineFileInput" accept=".xlsx,.xls" />
+    <span id="timelineFileStatus" class="msg" style="padding:0"></span>
+  </div>
+
+  <div class="upload-row" id="thresholdRow" style="display:none; padding-top:0;">
+    <label class="threshold-label">Near-release warning within <input type="number" id="nearDaysInput" value="14" min="1" class="threshold-input" /> days</label>
+    <label class="threshold-label">"Coming your way" window: next <input type="number" id="upcomingDaysInput" value="30" min="1" class="threshold-input" /> days</label>
+    <div class="legend">
+      <span class="legend-item"><span class="legend-swatch swatch-overdue"></span>Overdue</span>
+      <span class="legend-item"><span class="legend-swatch swatch-near"></span>Near release</span>
+      <span class="legend-item"><span class="legend-swatch swatch-ok"></span>On track</span>
+    </div>
+  </div>
+
+  <div class="timeline-wrap">
+    <div id="timelineChartContainer"></div>
+  </div>
+
+  <div id="drilldownContainer" class="drilldown" style="display:none">
+    <button class="close-drilldown" id="closeDrilldownBtn">Close</button>
+    <h3 id="drilldownTitle"></h3>
+    <div style="overflow-x:auto">
+      <table id="drilldownTable">
+        <thead>
+          <tr>
+            <th>Report Name</th>
+            <th>PO</th>
+            <th>Status</th>
+            <th>Status Start</th>
+            <th>Expected Release</th>
+            <th>Actual Release</th>
+            <th>Risk</th>
+            <th>DB Developer</th>
+            <th>PBI Developer</th>
+            <th>Schema</th>
+          </tr>
+        </thead>
+        <tbody id="drilldownTbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="upcomingContainer" class="drilldown" style="display:none; margin-top:0;">
+    <h3>Reports coming your way (DEV, releasing soon)</h3>
+    <p class="upcoming-sub">Reports currently in <b>DEV</b> status with an Expected Release Date inside the window above — so POs aren't surprised by a report landing for testing.</p>
+    <div style="overflow-x:auto">
+      <table id="upcomingTable">
+        <thead>
+          <tr>
+            <th>PO</th>
+            <th>Report Name</th>
+            <th>Domain</th>
+            <th>Status Start</th>
+            <th>Expected Release</th>
+            <th>Days Until Release</th>
+            <th>Risk</th>
+            <th>DB Developer</th>
+            <th>PBI Developer</th>
+            <th>Schema</th>
+          </tr>
+        </thead>
+        <tbody id="upcomingTbody"></tbody>
+      </table>
+    </div>
+    <div id="upcomingEmpty" class="msg" style="display:none; padding-left:0;">No DEV-status reports expected in this window.</div>
+  </div>
+
+  <div id="gapsContainer" class="drilldown" style="display:none; margin-top:0;">
+    <h3>Stage progression gaps</h3>
+    <p class="upcoming-sub">A completed stage's Actual Release Date should match the Status Start Date of that report's next-stage record (e.g. DEV's Actual Release Date = QA's Status Start Date). Rows below have a completed stage with no matching next-stage record found — either the next stage hasn't been logged yet, or the dates don't line up.</p>
+    <div style="overflow-x:auto">
+      <table id="gapsTable">
+        <thead>
+          <tr>
+            <th>Report Name</th>
+            <th>Domain</th>
+            <th>PO</th>
+            <th>Completed Stage</th>
+            <th>Completed On</th>
+            <th>Expected Next Stage</th>
+          </tr>
+        </thead>
+        <tbody id="gapsTbody"></tbody>
+      </table>
+    </div>
+    <div id="gapsEmpty" class="msg" style="display:none; padding-left:0;">No gaps found — every completed stage has a matching next-stage record.</div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+let config = null;
+let currentIssues = [];
+
+async function loadConfig() {
+  const res = await fetch('/api/config');
+  if (!res.ok) throw new Error((await res.json()).error || 'Failed to load config');
+  config = await res.json();
+  document.getElementById('jqlInput').value = config.defaultJql || '';
+}
+
+async function fetchStatusOptions(sampleKey) {
+  const url = sampleKey
+    ? `/api/status-options?sampleIssueKey=${encodeURIComponent(sampleKey)}`
+    : '/api/status-options';
+  const res = await fetch(url);
+  if (!res.ok) return { type: 'unknown', options: [] };
+  return res.json();
+}
+
+function renderSummary(issues) {
+  const counts = {};
+  issues.forEach((i) => {
+    const s = i.migrationStatus || 'Unset';
+    counts[s] = (counts[s] || 0) + 1;
+  });
+  const el = document.getElementById('summary');
+  el.innerHTML = '';
+  const total = document.createElement('div');
+  total.className = 'chip';
+  total.innerHTML = `Total tickets<b>${issues.length}</b>`;
+  el.appendChild(total);
+  Object.entries(counts).forEach(([status, count]) => {
+    const chip = document.createElement('div');
+    chip.className = 'chip';
+    chip.innerHTML = `${status}<b>${count}</b>`;
+    el.appendChild(chip);
+  });
+}
+
+async function renderTable(issues) {
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = '';
+
+  let statusOptions = [];
+  let optionsType = 'unknown';
+  if (issues.length > 0) {
+    const opts = await fetchStatusOptions(issues[0].key);
+    statusOptions = opts.options || [];
+    optionsType = opts.type;
+  }
+
+  issues.forEach((issue) => {
+    const tr = document.createElement('tr');
+
+    const keyTd = document.createElement('td');
+    keyTd.innerHTML = `<a class="key" href="${issue.url}" target="_blank" rel="noopener">${issue.key}</a>`;
+    tr.appendChild(keyTd);
+
+    const summaryTd = document.createElement('td');
+    summaryTd.textContent = issue.summary || '';
+    tr.appendChild(summaryTd);
+
+    const assigneeTd = document.createElement('td');
+    assigneeTd.textContent = issue.assignee || 'Unassigned';
+    tr.appendChild(assigneeTd);
+
+    const statusTd = document.createElement('td');
+    statusTd.innerHTML = `<span class="badge">${issue.status || '—'}</span>`;
+    tr.appendChild(statusTd);
+
+    const migTd = document.createElement('td');
+    if (statusOptions.length > 0) {
+      const select = document.createElement('select');
+      select.className = 'status-edit';
+      const blankOpt = document.createElement('option');
+      blankOpt.value = '';
+      blankOpt.textContent = issue.migrationStatus ? issue.migrationStatus : '(unset)';
+      select.appendChild(blankOpt);
+      statusOptions.forEach((opt) => {
+        const o = document.createElement('option');
+        o.value = opt.value;
+        o.textContent = opt.value;
+        if (opt.value === issue.migrationStatus) o.selected = true;
+        select.appendChild(o);
+      });
+      const saveMsg = document.createElement('span');
+      saveMsg.className = 'save-status';
+      select.addEventListener('change', async () => {
+        if (!select.value) return;
+        saveMsg.textContent = 'Saving…';
+        try {
+          const res = await fetch(`/api/tickets/${encodeURIComponent(issue.key)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ value: select.value }),
+          });
+          const body = await res.json();
+          if (!res.ok) throw new Error(body.error || 'Update failed');
+          saveMsg.textContent = 'Saved ✓';
+        } catch (err) {
+          saveMsg.textContent = 'Error: ' + err.message;
+        }
+      });
+      migTd.appendChild(select);
+      migTd.appendChild(saveMsg);
+    } else {
+      migTd.innerHTML = `<span class="badge">${issue.migrationStatus || '—'}</span>`;
+    }
+    tr.appendChild(migTd);
+
+    const updatedTd = document.createElement('td');
+    updatedTd.textContent = issue.updated ? new Date(issue.updated).toLocaleString() : '';
+    tr.appendChild(updatedTd);
+
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('table').style.display = issues.length ? 'table' : 'none';
+}
+
+async function loadTickets() {
+  const msg = document.getElementById('msg');
+  msg.textContent = 'Loading tickets…';
+  msg.classList.remove('error');
+  try {
+    const jql = document.getElementById('jqlInput').value.trim();
+    const res = await fetch(`/api/tickets?jql=${encodeURIComponent(jql)}`);
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error || 'Failed to load tickets');
+    currentIssues = body.issues || [];
+    renderSummary(currentIssues);
+    await renderTable(currentIssues);
+    msg.textContent = currentIssues.length
+      ? ''
+      : 'No tickets matched this query.';
+  } catch (err) {
+    msg.textContent = err.message;
+    msg.classList.add('error');
+    document.getElementById('table').style.display = 'none';
+  }
+}
+
+document.getElementById('runBtn').addEventListener('click', loadTickets);
+document.getElementById('refreshBtn').addEventListener('click', loadTickets);
+document.getElementById('jqlInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') loadTickets();
+});
+
+// ---------------------------------------------------------------------------
+// Tabs
+// ---------------------------------------------------------------------------
+
+document.getElementById('tabJiraBtn').addEventListener('click', () => {
+  document.getElementById('tabJiraBtn').classList.add('active');
+  document.getElementById('tabTimelineBtn').classList.remove('active');
+  document.getElementById('jiraPanel').style.display = 'block';
+  document.getElementById('timelinePanel').style.display = 'none';
+});
+document.getElementById('tabTimelineBtn').addEventListener('click', () => {
+  document.getElementById('tabTimelineBtn').classList.add('active');
+  document.getElementById('tabJiraBtn').classList.remove('active');
+  document.getElementById('timelinePanel').style.display = 'block';
+  document.getElementById('jiraPanel').style.display = 'none';
+});
+
+// ---------------------------------------------------------------------------
+// Migration Timeline (client-side Excel upload -> Fact/Dim Table -> heatmap)
+// ---------------------------------------------------------------------------
+
+let factRows = [];      // parsed 'Fact Table' rows
+let dimRows = [];       // parsed 'Dim Table' rows
+let monthKeys = [];     // e.g. ['2026-04', '2026-05', ...] sorted chronologically
+let monthLabels = {};   // '2026-04' -> 'Apr-26'
+let domainCounts = {};  // domain -> { month key -> expected count, from Dim Table }
+
+function monthKeyFromDate(d) {
+  if (!(d instanceof Date) || isNaN(d)) return null;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+function monthLabelFromDate(d) {
+  return d.toLocaleString('en-US', { month: 'short' }) + '-' + String(d.getFullYear()).slice(-2);
+}
+
+// ---------------------------------------------------------------------------
+// Risk classification: Overdue / Near release / On track / Released
+//
+// Rules (recommended defaults, both thresholds adjustable in the UI):
+//   - Released:  Actual Release Date is filled in — already shipped, no risk.
+//   - Overdue:   No Actual Release Date yet, and Expected Release Date has
+//                already passed (today > expected).
+//   - Near:      No Actual Release Date yet, and Expected Release Date falls
+//                within the next N days (default 14) — flag before it's late.
+//   - On track:  Everything else (comfortably in the future, or unscheduled).
+// ---------------------------------------------------------------------------
+
+function getNearDays() {
+  const v = parseInt(document.getElementById('nearDaysInput').value, 10);
+  return Number.isFinite(v) && v > 0 ? v : 14;
+}
+function getUpcomingDays() {
+  const v = parseInt(document.getElementById('upcomingDaysInput').value, 10);
+  return Number.isFinite(v) && v > 0 ? v : 30;
+}
+function daysBetween(a, b) {
+  return Math.round((b - a) / (1000 * 60 * 60 * 24));
+}
+function startOfToday() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function classifyRisk(row, today, nearDays) {
+  const expected = row['Expected Release Date'];
+  const actual = row['Actual Release Date'];
+  if (actual instanceof Date && !isNaN(actual)) {
+    return { level: 'released', label: 'Released' };
+  }
+  if (!(expected instanceof Date) || isNaN(expected)) {
+    return { level: 'ontrack', label: 'On track' };
+  }
+  const daysUntil = daysBetween(today, expected);
+  if (daysUntil < 0) {
+    return { level: 'overdue', label: `Overdue ${Math.abs(daysUntil)}d` };
+  }
+  if (daysUntil <= nearDays) {
+    return { level: 'near', label: `Due in ${daysUntil}d` };
+  }
+  return { level: 'ontrack', label: 'On track' };
+}
+
+function riskBadgeHtml(risk) {
+  return `<span class="risk-badge ${risk.level}">${risk.label}</span>`;
+}
+
+// Worst risk level found among Fact Table rows for a given domain + month cell
+// (overdue > near > ok), used to color the timeline heatmap cells.
+function computeCellRisk(domain, monthKey, today, nearDays) {
+  let worst = null;
+  factRows.forEach((row) => {
+    if (row['Domain'] !== domain) return;
+    if (monthKeyFromDate(row['Expected Release Date']) !== monthKey) return;
+    const risk = classifyRisk(row, today, nearDays);
+    if (risk.level === 'overdue') worst = 'overdue';
+    else if (risk.level === 'near' && worst !== 'overdue') worst = 'near';
+  });
+  return worst;
+}
+
+function excelSheetToRows(workbook, sheetName) {
+  const sheet = workbook.Sheets[sheetName];
+  if (!sheet) return [];
+  return XLSX.utils.sheet_to_json(sheet, { defval: null, raw: true });
+}
+
+document.getElementById('timelineFileInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  const statusEl = document.getElementById('timelineFileStatus');
+  if (!file) return;
+  statusEl.textContent = 'Reading ' + file.name + '…';
+  statusEl.classList.remove('error');
+  try {
+    const buf = await file.arrayBuffer();
+    const workbook = XLSX.read(buf, { type: 'array', cellDates: true });
+
+    factRows = excelSheetToRows(workbook, 'Fact Table');
+    dimRows = excelSheetToRows(workbook, 'Dim Table');
+
+    if (!dimRows.length) {
+      throw new Error('No "Dim Table" sheet found (or it\'s empty) in this file.');
+    }
+
+    buildTimeline();
+    renderUpcomingForPO();
+    renderStageGaps();
+    statusEl.textContent = `Loaded ${factRows.length} report rows, ${dimRows.length} timeline rows from ${file.name}.`;
+    document.getElementById('drilldownContainer').style.display = 'none';
+    document.getElementById('thresholdRow').style.display = 'flex';
+    document.getElementById('upcomingContainer').style.display = 'block';
+    document.getElementById('gapsContainer').style.display = 'block';
+  } catch (err) {
+    statusEl.textContent = 'Error: ' + err.message;
+    statusEl.classList.add('error');
+  }
+});
+
+document.getElementById('nearDaysInput').addEventListener('change', () => {
+  if (dimRows.length) buildTimeline();
+});
+document.getElementById('upcomingDaysInput').addEventListener('change', () => {
+  if (factRows.length) renderUpcomingForPO();
+});
+
+function buildTimeline() {
+  // Collect all months present in the Dim Table, sorted chronologically
+  const monthSet = new Map(); // key -> label
+  dimRows.forEach((row) => {
+    const d = row['Expected Release Date'];
+    const key = monthKeyFromDate(d);
+    if (key) monthSet.set(key, monthLabelFromDate(d));
+  });
+  monthKeys = Array.from(monthSet.keys()).sort();
+  monthLabels = Object.fromEntries(monthSet.entries());
+
+  // Domain -> { month key -> count }
+  const domainOrder = [];
+  domainCounts = {};
+  dimRows.forEach((row) => {
+    const domain = row['Domain'];
+    if (!domain) return;
+    const key = monthKeyFromDate(row['Expected Release Date']);
+    if (!key) return;
+    if (!domainCounts[domain]) {
+      domainCounts[domain] = {};
+      domainOrder.push(domain);
+    }
+    const count = Number(row['Expected Report Count']) || 0;
+    domainCounts[domain][key] = (domainCounts[domain][key] || 0) + count;
+  });
+
+  renderTimelineTable(domainOrder, domainCounts);
+}
+
+function renderTimelineTable(domainOrder, domainCounts) {
+  const container = document.getElementById('timelineChartContainer');
+  container.innerHTML = '';
+
+  const table = document.createElement('table');
+  table.className = 'timeline';
+
+  const thead = document.createElement('thead');
+  const headRow = document.createElement('tr');
+  headRow.innerHTML =
+    '<th class="domain-col">Data Product</th><th>Total</th>' +
+    monthKeys.map((k) => `<th>${monthLabels[k]}</th>`).join('');
+  thead.appendChild(headRow);
+  table.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
+  let grandTotal = 0;
+  const monthTotals = {};
+  monthKeys.forEach((k) => (monthTotals[k] = 0));
+
+  const today = startOfToday();
+  const nearDays = getNearDays();
+
+  domainOrder.forEach((domain) => {
+    const tr = document.createElement('tr');
+    const counts = domainCounts[domain];
+    const rowTotal = Object.values(counts).reduce((a, b) => a + b, 0);
+    grandTotal += rowTotal;
+
+    let rowHtml = `<td class="domain-col">${domain}</td><td>${rowTotal}</td>`;
+    monthKeys.forEach((k) => {
+      const val = counts[k];
+      if (val) {
+        monthTotals[k] += val;
+        const risk = computeCellRisk(domain, k, today, nearDays);
+        const riskClass = risk === 'overdue' ? ' risk-overdue' : risk === 'near' ? ' risk-near' : '';
+        rowHtml += `<td class="count-cell${riskClass}" data-domain="${encodeURIComponent(domain)}" data-month="${k}">${val}</td>`;
+      } else {
+        rowHtml += '<td class="empty-cell">·</td>';
+      }
+    });
+    tr.innerHTML = rowHtml;
+    tbody.appendChild(tr);
+  });
+
+  // Total row
+  const totalTr = document.createElement('tr');
+  totalTr.className = 'total-row';
+  totalTr.innerHTML =
+    `<td class="domain-col">Total</td><td>${grandTotal}</td>` +
+    monthKeys.map((k) => `<td>${monthTotals[k] || ''}</td>`).join('');
+  tbody.appendChild(totalTr);
+
+  table.appendChild(tbody);
+  container.appendChild(table);
+
+  container.querySelectorAll('td.count-cell').forEach((cell) => {
+    cell.addEventListener('click', () => {
+      const domain = decodeURIComponent(cell.dataset.domain);
+      const month = cell.dataset.month;
+      showDrilldown(domain, month);
+    });
+  });
+}
+
+function showDrilldown(domain, monthKey) {
+  const matches = factRows.filter((row) => {
+    if (row['Domain'] !== domain) return false;
+    const key = monthKeyFromDate(row['Expected Release Date']);
+    return key === monthKey;
+  });
+
+  const expectedCount = (domainCounts[domain] && domainCounts[domain][monthKey]) || 0;
+  const foundCount = matches.length;
+  const missingCount = Math.max(expectedCount - foundCount, 0);
+  const extraCount = Math.max(foundCount - expectedCount, 0);
+
+  let titleText = `${domain} — ${monthLabels[monthKey]}: ${foundCount} of ${expectedCount} expected report${expectedCount === 1 ? '' : 's'} found`;
+  if (missingCount > 0) {
+    titleText += ` (${missingCount} missing)`;
+  } else if (extraCount > 0) {
+    titleText += ` (${extraCount} more than expected)`;
+  } else {
+    titleText += ' (all accounted for)';
+  }
+
+  const title = document.getElementById('drilldownTitle');
+  title.textContent = titleText;
+
+  const today = startOfToday();
+  const nearDays = getNearDays();
+
+  const tbody = document.getElementById('drilldownTbody');
+  tbody.innerHTML = '';
+  matches.forEach((row) => {
+    const tr = document.createElement('tr');
+    const fmt = (d) => (d instanceof Date && !isNaN(d) ? d.toLocaleDateString() : (d || ''));
+    const risk = classifyRisk(row, today, nearDays);
+    tr.innerHTML = `
+      <td>${row['Report Name'] || ''}</td>
+      <td>${row['PO'] || ''}</td>
+      <td><span class="badge">${(row['Status'] || '').trim() || '—'}</span></td>
+      <td>${fmt(row['Status Start Date'])}</td>
+      <td>${fmt(row['Expected Release Date'])}</td>
+      <td>${fmt(row['Actual Release Date'])}</td>
+      <td>${riskBadgeHtml(risk)}</td>
+      <td>${row['DB Developers '] ?? row['DB Developers'] ?? ''}</td>
+      <td>${row['PBI Developers'] || ''}</td>
+      <td>${row['Schema'] || ''}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('drilldownContainer').style.display = 'block';
+  document.getElementById('drilldownContainer').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+document.getElementById('closeDrilldownBtn').addEventListener('click', () => {
+  document.getElementById('drilldownContainer').style.display = 'none';
+});
+
+// ---------------------------------------------------------------------------
+// "Reports coming your way" — PO-facing view: Status = DEV, releasing soon
+// ---------------------------------------------------------------------------
+
+function renderUpcomingForPO() {
+  const today = startOfToday();
+  const nearDays = getNearDays();
+  const upcomingDays = getUpcomingDays();
+
+  const cutoff = new Date(today);
+  cutoff.setDate(cutoff.getDate() + upcomingDays);
+
+  const upcoming = factRows.filter((row) => {
+    const status = (row['Status'] || '').trim().toLowerCase();
+    if (status !== 'dev') return false;
+    const expected = row['Expected Release Date'];
+    if (!(expected instanceof Date) || isNaN(expected)) return false;
+    return expected <= cutoff; // includes anything already overdue too
+  });
+
+  upcoming.sort((a, b) => a['Expected Release Date'] - b['Expected Release Date']);
+
+  const tbody = document.getElementById('upcomingTbody');
+  tbody.innerHTML = '';
+  const fmt = (d) => (d instanceof Date && !isNaN(d) ? d.toLocaleDateString() : (d || ''));
+
+  upcoming.forEach((row) => {
+    const tr = document.createElement('tr');
+    const risk = classifyRisk(row, today, nearDays);
+    const expected = row['Expected Release Date'];
+    const actual = row['Actual Release Date'];
+    const alreadyReleased = actual instanceof Date && !isNaN(actual);
+    const daysUntil = expected instanceof Date && !isNaN(expected) ? daysBetween(today, expected) : '';
+    let daysCell;
+    if (alreadyReleased) {
+      daysCell = `Released ${fmt(actual)}`;
+    } else if (daysUntil === '') {
+      daysCell = '';
+    } else if (daysUntil < 0) {
+      daysCell = `${Math.abs(daysUntil)}d overdue`;
+    } else {
+      daysCell = `${daysUntil}d`;
+    }
+    tr.innerHTML = `
+      <td>${row['PO'] || ''}</td>
+      <td>${row['Report Name'] || ''}</td>
+      <td>${row['Domain'] || ''}</td>
+      <td>${fmt(row['Status Start Date'])}</td>
+      <td>${fmt(expected)}</td>
+      <td>${daysCell}</td>
+      <td>${riskBadgeHtml(risk)}</td>
+      <td>${row['DB Developers '] ?? row['DB Developers'] ?? ''}</td>
+      <td>${row['PBI Developers'] || ''}</td>
+      <td>${row['Schema'] || ''}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('upcomingTable').style.display = upcoming.length ? 'table' : 'none';
+  document.getElementById('upcomingEmpty').style.display = upcoming.length ? 'none' : 'block';
+}
+
+// ---------------------------------------------------------------------------
+// Stage progression gaps
+//
+// Rule (as described): a report's Actual Release Date on one stage means that
+// stage is complete and the report has moved into the next stage. There
+// should therefore be another record for the same Report Name whose Status
+// is the next stage in sequence, with a Status Start Date matching that
+// Actual Release Date. If no such record exists, flag it as a gap.
+// ---------------------------------------------------------------------------
+
+const STAGE_SEQUENCE = ['not started', 'dev', 'qa', 'uat', 'in production'];
+
+function sameDay(a, b) {
+  return (
+    a instanceof Date && !isNaN(a) && b instanceof Date && !isNaN(b) &&
+    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
+  );
+}
+
+function computeStageGaps() {
+  const byReport = new Map();
+  factRows.forEach((row) => {
+    const name = row['Report Name'];
+    if (!name) return;
+    if (!byReport.has(name)) byReport.set(name, []);
+    byReport.get(name).push(row);
+  });
+
+  const gaps = [];
+  byReport.forEach((records, reportName) => {
+    records.forEach((row) => {
+      const status = (row['Status'] || '').trim().toLowerCase();
+      const idx = STAGE_SEQUENCE.indexOf(status);
+      if (idx === -1 || idx === STAGE_SEQUENCE.length - 1) return; // unrecognized or already final stage
+      const actual = row['Actual Release Date'];
+      if (!(actual instanceof Date) || isNaN(actual)) return; // stage not completed yet, nothing to check
+
+      const nextStage = STAGE_SEQUENCE[idx + 1];
+      const hasMatch = records.some((r2) => {
+        const s2 = (r2['Status'] || '').trim().toLowerCase();
+        return s2 === nextStage && sameDay(r2['Status Start Date'], actual);
+      });
+
+      if (!hasMatch) {
+        gaps.push({
+          reportName,
+          domain: row['Domain'] || '',
+          po: row['PO'] || '',
+          completedStage: row['Status'],
+          completedOn: actual,
+          nextStage,
+        });
+      }
+    });
+  });
+
+  return gaps;
+}
+
+function renderStageGaps() {
+  const gaps = computeStageGaps();
+  const tbody = document.getElementById('gapsTbody');
+  tbody.innerHTML = '';
+  const fmt = (d) => (d instanceof Date && !isNaN(d) ? d.toLocaleDateString() : '');
+  const titleCase = (s) => (s || '').replace(/\b\w/g, (c) => c.toUpperCase());
+
+  gaps.forEach((g) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${g.reportName}</td>
+      <td>${g.domain}</td>
+      <td>${g.po}</td>
+      <td><span class="badge">${(g.completedStage || '').trim()}</span></td>
+      <td>${fmt(g.completedOn)}</td>
+      <td>${titleCase(g.nextStage)}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('gapsTable').style.display = gaps.length ? 'table' : 'none';
+  document.getElementById('gapsEmpty').style.display = gaps.length ? 'none' : 'block';
+}
+
+(async function init() {
+  try {
+    const statusRes = await fetch('/api/oauth-status');
+    const status = await statusRes.json();
+
+    if (status.mode === 'oauth' && !status.connected) {
+      document.getElementById('connectGate').style.display = 'block';
+      document.getElementById('mainUi').style.display = 'none';
+      return;
+    }
+
+    document.getElementById('connectGate').style.display = 'none';
+    document.getElementById('mainUi').style.display = 'block';
+    if (status.siteUrl) {
+      const badge = document.getElementById('siteBadge');
+      badge.textContent = `Connected to ${status.siteUrl}`;
+      badge.style.display = 'block';
+    }
+
+    await loadConfig();
+    await loadTickets();
+  } catch (err) {
+    document.getElementById('msg').textContent = err.message;
+    document.getElementById('msg').classList.add('error');
+  }
+})();
+</script>
+</body>
+</html>
