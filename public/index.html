@@ -315,10 +315,6 @@
     <span id="timelineFileStatus" class="msg" style="padding:0"></span>
   </div>
 
-  <div class="upload-row" id="thresholdRow" style="display:none; padding-top:0;">
-    <label class="threshold-label">Near-release warning within <input type="number" id="nearDaysInput" value="14" min="1" class="threshold-input" /> days</label>
-    <label class="threshold-label">"Coming your way" window: next <input type="number" id="upcomingDaysInput" value="30" min="1" class="threshold-input" /> days</label>
-  </div>
   <div class="upload-row" id="thresholdRow2" style="display:none; padding-top:0;">
     <label class="threshold-label">Timeline: overdue &#8805; <input type="number" id="overdueAmberDaysInput" value="2" min="1" class="threshold-input" /> days &rarr; amber</label>
     <label class="threshold-label">Timeline: overdue &#8805; <input type="number" id="overdueRedDaysInput" value="10" min="1" class="threshold-input" /> days &rarr; red</label>
@@ -332,6 +328,11 @@
 
   <div class="timeline-wrap">
     <div id="timelineChartContainer"></div>
+  </div>
+
+  <div class="upload-row" id="thresholdRow" style="display:none; padding-top:0;">
+    <label class="threshold-label">Near-release warning within <input type="number" id="nearDaysInput" value="14" min="1" class="threshold-input" /> days</label>
+    <label class="threshold-label">"Coming your way" window: next <input type="number" id="upcomingDaysInput" value="30" min="1" class="threshold-input" /> days</label>
   </div>
 
   <div id="drilldownContainer" class="drilldown" style="display:none">
