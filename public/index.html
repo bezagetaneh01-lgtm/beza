@@ -239,7 +239,6 @@
 
   .risk-badge { padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; }
   .risk-badge.overdue { background: #f28b82; color: #3a0a06; }
-  .risk-badge.near { background: #fbc02d; color: #3a2c00; }
   .risk-badge.ontrack { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); }
   .risk-badge.released { background: var(--green); color: #06280f; }
 
@@ -343,10 +342,6 @@
 
   <div class="upload-row" id="thresholdRow" style="display:none; padding-top:0; align-items:flex-start;">
     <div class="threshold-block">
-      <label class="threshold-label">Flag reports as "Near release" within <input type="number" id="nearDaysInput" value="14" min="1" class="threshold-input" /> days of their Expected Release Date</label>
-      <div class="threshold-desc">Controls the amber "Near release" Risk badge on report rows in the drill-down and Coming Your Way tables. Does not affect the timeline chart's colors.</div>
-    </div>
-    <div class="threshold-block">
       <label class="threshold-label">Show DEV reports releasing within the next <input type="number" id="upcomingDaysInput" value="30" min="1" class="threshold-input" /> days</label>
       <div class="threshold-desc">Controls which reports appear in the "Reports coming your way" table below — includes any already overdue DEV reports too.</div>
     </div>
@@ -383,6 +378,11 @@
       <label class="threshold-label">Filter by PO:
         <select id="upcomingPoFilter" class="threshold-input" style="width:auto; padding:5px 8px;">
           <option value="">All POs</option>
+        </select>
+      </label>
+      <label class="threshold-label">Filter by month:
+        <select id="upcomingMonthFilter" class="threshold-input" style="width:auto; padding:5px 8px;">
+          <option value="">All months</option>
         </select>
       </label>
     </div>
@@ -616,21 +616,15 @@ function monthLabelFromDate(d) {
 }
 
 // ---------------------------------------------------------------------------
-// Risk classification: Overdue / Near release / On track / Released
+// Risk classification: Overdue / On track / Released
 //
-// Rules (recommended defaults, both thresholds adjustable in the UI):
+// Rules:
 //   - Released:  Actual Release Date is filled in — already shipped, no risk.
 //   - Overdue:   No Actual Release Date yet, and Expected Release Date has
 //                already passed (today > expected).
-//   - Near:      No Actual Release Date yet, and Expected Release Date falls
-//                within the next N days (default 14) — flag before it's late.
 //   - On track:  Everything else (comfortably in the future, or unscheduled).
 // ---------------------------------------------------------------------------
 
-function getNearDays() {
-  const v = parseInt(document.getElementById('nearDaysInput').value, 10);
-  return Number.isFinite(v) && v > 0 ? v : 14;
-}
 function getUpcomingDays() {
   const v = parseInt(document.getElementById('upcomingDaysInput').value, 10);
   return Number.isFinite(v) && v > 0 ? v : 30;
@@ -655,7 +649,7 @@ function currentMonthKey(today) {
   return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
 }
 
-function classifyRisk(row, today, nearDays) {
+function classifyRisk(row, today) {
   const expected = row['Expected Release Date'];
   const actual = row['Actual Release Date'];
   if (actual instanceof Date && !isNaN(actual)) {
@@ -668,9 +662,6 @@ function classifyRisk(row, today, nearDays) {
   if (daysUntil < 0) {
     return { level: 'overdue', label: `Overdue ${Math.abs(daysUntil)}d` };
   }
-  if (daysUntil <= nearDays) {
-    return { level: 'near', label: `Due in ${daysUntil}d` };
-  }
   return { level: 'ontrack', label: 'On track' };
 }
 
@@ -679,9 +670,7 @@ function riskBadgeHtml(risk) {
 }
 
 // Worst risk level found among Fact Table rows for a given domain + month cell,
-// used to color the timeline heatmap cells specifically. Tiered overdue rule
-// only — near-release (not yet due) does NOT contribute to heatmap coloring,
-// only to the drill-down table's Risk badges via classifyRisk():
+// used to color the timeline heatmap cells specifically. Tiered overdue rule only:
 //   - overdue >= overdueRedDays   -> 'overdue' (red)
 //   - overdue >= overdueAmberDays -> 'near'     (amber)
 //   - overdue but < overdueAmberDays -> no flag from this report
@@ -785,14 +774,13 @@ async function tryAutoLoadDefaultWorkbook() {
 }
 tryAutoLoadDefaultWorkbook();
 
-document.getElementById('nearDaysInput').addEventListener('change', () => {
-  if (dimRows.length) buildTimeline();
-  if (factRows.length) renderUpcomingForPO();
-});
 document.getElementById('upcomingDaysInput').addEventListener('change', () => {
   if (factRows.length) renderUpcomingForPO();
 });
 document.getElementById('upcomingPoFilter').addEventListener('change', () => {
+  if (factRows.length) renderUpcomingForPO();
+});
+document.getElementById('upcomingMonthFilter').addEventListener('change', () => {
   if (factRows.length) renderUpcomingForPO();
 });
 document.getElementById('overdueAmberDaysInput').addEventListener('change', () => {
@@ -936,14 +924,13 @@ function showDrilldown(domain, monthKey) {
   title.textContent = titleText;
 
   const today = startOfToday();
-  const nearDays = getNearDays();
 
   const tbody = document.getElementById('drilldownTbody');
   tbody.innerHTML = '';
   matches.forEach((row) => {
     const tr = document.createElement('tr');
     const fmt = (d) => (d instanceof Date && !isNaN(d) ? d.toLocaleDateString() : (d || ''));
-    const risk = classifyRisk(row, today, nearDays);
+    const risk = classifyRisk(row, today);
     tr.innerHTML = `
       <td>${row['Report Name'] || ''}</td>
       <td>${row['PO'] || ''}</td>
@@ -961,6 +948,14 @@ function showDrilldown(domain, monthKey) {
 
   document.getElementById('drilldownContainer').style.display = 'block';
   document.getElementById('drilldownContainer').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  // Sync "Reports coming your way" to the same month that was just clicked on
+  // the timeline chart, so both views stay in context together.
+  const monthFilterSelect = document.getElementById('upcomingMonthFilter');
+  if (monthFilterSelect) {
+    monthFilterSelect.value = monthKey;
+    if (factRows.length) renderUpcomingForPO();
+  }
 }
 
 document.getElementById('closeDrilldownBtn').addEventListener('click', () => {
@@ -979,9 +974,19 @@ function populateUpcomingPoFilter(rows) {
   if (pos.includes(current)) select.value = current;
 }
 
+// Populated from the full set of months present in the Dim Table (same
+// monthKeys/monthLabels the timeline chart uses), not just months that have
+// upcoming rows — so clicking any chart cell always has a matching option.
+function populateUpcomingMonthFilter() {
+  const select = document.getElementById('upcomingMonthFilter');
+  const current = select.value;
+  select.innerHTML = '<option value="">All months</option>' +
+    monthKeys.map((k) => `<option value="${k}">${monthLabels[k]}</option>`).join('');
+  if (monthKeys.includes(current)) select.value = current;
+}
+
 function renderUpcomingForPO() {
   const today = startOfToday();
-  const nearDays = getNearDays();
   const upcomingDays = getUpcomingDays();
 
   const cutoff = new Date(today);
@@ -996,10 +1001,16 @@ function renderUpcomingForPO() {
   });
 
   populateUpcomingPoFilter(upcomingAll);
+  populateUpcomingMonthFilter();
   const poFilterValue = document.getElementById('upcomingPoFilter').value;
-  const upcoming = poFilterValue
-    ? upcomingAll.filter((row) => (row['PO'] || '').toString().trim() === poFilterValue)
-    : upcomingAll;
+  const monthFilterValue = document.getElementById('upcomingMonthFilter').value;
+  let upcoming = upcomingAll;
+  if (poFilterValue) {
+    upcoming = upcoming.filter((row) => (row['PO'] || '').toString().trim() === poFilterValue);
+  }
+  if (monthFilterValue) {
+    upcoming = upcoming.filter((row) => monthKeyFromDate(row['Expected Release Date']) === monthFilterValue);
+  }
 
   upcoming.sort((a, b) => a['Expected Release Date'] - b['Expected Release Date']);
 
@@ -1009,7 +1020,7 @@ function renderUpcomingForPO() {
 
   upcoming.forEach((row) => {
     const tr = document.createElement('tr');
-    const risk = classifyRisk(row, today, nearDays);
+    const risk = classifyRisk(row, today);
     const expected = row['Expected Release Date'];
     const actual = row['Actual Release Date'];
     const alreadyReleased = actual instanceof Date && !isNaN(actual);
