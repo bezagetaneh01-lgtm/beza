@@ -340,13 +340,6 @@
     <div id="timelineChartContainer"></div>
   </div>
 
-  <div class="upload-row" id="thresholdRow" style="display:none; padding-top:0; align-items:flex-start;">
-    <div class="threshold-block">
-      <label class="threshold-label">Show DEV reports releasing within the next <input type="number" id="upcomingDaysInput" value="30" min="1" class="threshold-input" /> days</label>
-      <div class="threshold-desc">Controls which reports appear in the "Reports coming your way" table below — includes any already overdue DEV reports too.</div>
-    </div>
-  </div>
-
   <div id="drilldownContainer" class="drilldown" style="display:none">
     <button class="close-drilldown" id="closeDrilldownBtn">Close</button>
     <h3 id="drilldownTitle"></h3>
@@ -368,6 +361,13 @@
         </thead>
         <tbody id="drilldownTbody"></tbody>
       </table>
+    </div>
+  </div>
+
+  <div class="upload-row" id="thresholdRow" style="display:none; padding-top:0; align-items:flex-start;">
+    <div class="threshold-block">
+      <label class="threshold-label">Show DEV reports releasing within the next <input type="number" id="upcomingDaysInput" value="30" min="1" class="threshold-input" /> days</label>
+      <div class="threshold-desc">Controls which reports appear in the "Reports coming your way" table below — includes any already overdue DEV reports too.</div>
     </div>
   </div>
 
