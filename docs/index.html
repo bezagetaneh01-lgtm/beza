@@ -362,6 +362,13 @@
   <div id="upcomingContainer" class="drilldown" style="display:none; margin-top:0;">
     <h3>Reports coming your way (DEV, releasing soon)</h3>
     <p class="upcoming-sub">Reports currently in <b>DEV</b> status with an Expected Release Date inside the window above — so POs aren't surprised by a report landing for testing.</p>
+    <div class="upload-row" style="padding:0 0 12px;">
+      <label class="threshold-label">Filter by PO:
+        <select id="upcomingPoFilter" class="threshold-input" style="width:auto; padding:5px 8px;">
+          <option value="">All POs</option>
+        </select>
+      </label>
+    </div>
     <div style="overflow-x:auto">
       <table id="upcomingTable">
         <thead>
@@ -767,6 +774,9 @@ document.getElementById('nearDaysInput').addEventListener('change', () => {
 document.getElementById('upcomingDaysInput').addEventListener('change', () => {
   if (factRows.length) renderUpcomingForPO();
 });
+document.getElementById('upcomingPoFilter').addEventListener('change', () => {
+  if (factRows.length) renderUpcomingForPO();
+});
 document.getElementById('overdueAmberDaysInput').addEventListener('change', () => {
   if (dimRows.length) buildTimeline();
 });
@@ -943,6 +953,14 @@ document.getElementById('closeDrilldownBtn').addEventListener('click', () => {
 // "Reports coming your way" — PO-facing view: Status = DEV, releasing soon
 // ---------------------------------------------------------------------------
 
+function populateUpcomingPoFilter(rows) {
+  const select = document.getElementById('upcomingPoFilter');
+  const current = select.value;
+  const pos = Array.from(new Set(rows.map((r) => (r['PO'] || '').toString().trim()).filter(Boolean))).sort();
+  select.innerHTML = '<option value="">All POs</option>' + pos.map((po) => `<option value="${po}">${po}</option>`).join('');
+  if (pos.includes(current)) select.value = current;
+}
+
 function renderUpcomingForPO() {
   const today = startOfToday();
   const nearDays = getNearDays();
@@ -951,13 +969,19 @@ function renderUpcomingForPO() {
   const cutoff = new Date(today);
   cutoff.setDate(cutoff.getDate() + upcomingDays);
 
-  const upcoming = factRows.filter((row) => {
+  const upcomingAll = factRows.filter((row) => {
     const status = (row['Status'] || '').trim().toLowerCase();
     if (status !== 'dev') return false;
     const expected = row['Expected Release Date'];
     if (!(expected instanceof Date) || isNaN(expected)) return false;
     return expected <= cutoff; // includes anything already overdue too
   });
+
+  populateUpcomingPoFilter(upcomingAll);
+  const poFilterValue = document.getElementById('upcomingPoFilter').value;
+  const upcoming = poFilterValue
+    ? upcomingAll.filter((row) => (row['PO'] || '').toString().trim() === poFilterValue)
+    : upcomingAll;
 
   upcoming.sort((a, b) => a['Expected Release Date'] - b['Expected Release Date']);
 
