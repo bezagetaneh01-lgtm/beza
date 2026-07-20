@@ -219,6 +219,17 @@
     border-radius: 5px;
     font-size: 12px;
   }
+  .threshold-block {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-width: 360px;
+  }
+  .threshold-desc {
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.4;
+  }
   .legend { display: flex; gap: 14px; margin-left: auto; }
   .legend-item { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
   .legend-swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
@@ -330,9 +341,15 @@
     <div id="timelineChartContainer"></div>
   </div>
 
-  <div class="upload-row" id="thresholdRow" style="display:none; padding-top:0;">
-    <label class="threshold-label">Near-release warning within <input type="number" id="nearDaysInput" value="14" min="1" class="threshold-input" /> days</label>
-    <label class="threshold-label">"Coming your way" window: next <input type="number" id="upcomingDaysInput" value="30" min="1" class="threshold-input" /> days</label>
+  <div class="upload-row" id="thresholdRow" style="display:none; padding-top:0; align-items:flex-start;">
+    <div class="threshold-block">
+      <label class="threshold-label">Flag reports as "Near release" within <input type="number" id="nearDaysInput" value="14" min="1" class="threshold-input" /> days of their Expected Release Date</label>
+      <div class="threshold-desc">Controls the amber "Near release" Risk badge on report rows in the drill-down and Coming Your Way tables. Does not affect the timeline chart's colors.</div>
+    </div>
+    <div class="threshold-block">
+      <label class="threshold-label">Show DEV reports releasing within the next <input type="number" id="upcomingDaysInput" value="30" min="1" class="threshold-input" /> days</label>
+      <div class="threshold-desc">Controls which reports appear in the "Reports coming your way" table below — includes any already overdue DEV reports too.</div>
+    </div>
   </div>
 
   <div id="drilldownContainer" class="drilldown" style="display:none">
@@ -362,6 +379,13 @@
   <div id="upcomingContainer" class="drilldown" style="display:none; margin-top:0;">
     <h3>Reports coming your way (DEV, releasing soon)</h3>
     <p class="upcoming-sub">Reports currently in <b>DEV</b> status with an Expected Release Date inside the window above — so POs aren't surprised by a report landing for testing.</p>
+    <div class="upload-row" style="padding:0 0 12px;">
+      <label class="threshold-label">Filter by PO:
+        <select id="upcomingPoFilter" class="threshold-input" style="width:auto; padding:5px 8px;">
+          <option value="">All POs</option>
+        </select>
+      </label>
+    </div>
     <div style="overflow-x:auto">
       <table id="upcomingTable">
         <thead>
@@ -763,8 +787,12 @@ tryAutoLoadDefaultWorkbook();
 
 document.getElementById('nearDaysInput').addEventListener('change', () => {
   if (dimRows.length) buildTimeline();
+  if (factRows.length) renderUpcomingForPO();
 });
 document.getElementById('upcomingDaysInput').addEventListener('change', () => {
+  if (factRows.length) renderUpcomingForPO();
+});
+document.getElementById('upcomingPoFilter').addEventListener('change', () => {
   if (factRows.length) renderUpcomingForPO();
 });
 document.getElementById('overdueAmberDaysInput').addEventListener('change', () => {
@@ -943,6 +971,14 @@ document.getElementById('closeDrilldownBtn').addEventListener('click', () => {
 // "Reports coming your way" — PO-facing view: Status = DEV, releasing soon
 // ---------------------------------------------------------------------------
 
+function populateUpcomingPoFilter(rows) {
+  const select = document.getElementById('upcomingPoFilter');
+  const current = select.value;
+  const pos = Array.from(new Set(rows.map((r) => (r['PO'] || '').toString().trim()).filter(Boolean))).sort();
+  select.innerHTML = '<option value="">All POs</option>' + pos.map((po) => `<option value="${po}">${po}</option>`).join('');
+  if (pos.includes(current)) select.value = current;
+}
+
 function renderUpcomingForPO() {
   const today = startOfToday();
   const nearDays = getNearDays();
@@ -951,13 +987,19 @@ function renderUpcomingForPO() {
   const cutoff = new Date(today);
   cutoff.setDate(cutoff.getDate() + upcomingDays);
 
-  const upcoming = factRows.filter((row) => {
+  const upcomingAll = factRows.filter((row) => {
     const status = (row['Status'] || '').trim().toLowerCase();
     if (status !== 'dev') return false;
     const expected = row['Expected Release Date'];
     if (!(expected instanceof Date) || isNaN(expected)) return false;
     return expected <= cutoff; // includes anything already overdue too
   });
+
+  populateUpcomingPoFilter(upcomingAll);
+  const poFilterValue = document.getElementById('upcomingPoFilter').value;
+  const upcoming = poFilterValue
+    ? upcomingAll.filter((row) => (row['PO'] || '').toString().trim() === poFilterValue)
+    : upcomingAll;
 
   upcoming.sort((a, b) => a['Expected Release Date'] - b['Expected Release Date']);
 
@@ -1011,7 +1053,14 @@ function renderUpcomingForPO() {
 // Actual Release Date. If no such record exists, flag it as a gap.
 // ---------------------------------------------------------------------------
 
-const STAGE_SEQUENCE = ['not started', 'dev', 'qa', 'uat', 'in production'];
+const STAGE_SEQUENCE = ['not started', 'dev', 'qa', 'dpo approval', 'in production'];
+const STAGE_LABELS = {
+  'not started': 'Not Started',
+  'dev': 'DEV',
+  'qa': 'QA',
+  'dpo approval': 'DPO Approval',
+  'in production': 'In Production',
+};
 
 function sameDay(a, b) {
   return (
@@ -1075,7 +1124,7 @@ function renderStageGaps() {
       <td>${g.po}</td>
       <td><span class="badge">${(g.completedStage || '').trim()}</span></td>
       <td>${fmt(g.completedOn)}</td>
-      <td>${titleCase(g.nextStage)}</td>
+      <td>${STAGE_LABELS[g.nextStage] || titleCase(g.nextStage)}</td>
     `;
     tbody.appendChild(tr);
   });
