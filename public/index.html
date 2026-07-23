@@ -348,7 +348,7 @@
         <thead>
           <tr>
             <th>Report Name</th>
-            <th>PO</th>
+            <th>QA Tester</th>
             <th>Status</th>
             <th>Status Start</th>
             <th>Expected Release</th>
@@ -366,18 +366,18 @@
 
   <div class="upload-row" id="thresholdRow" style="display:none; padding-top:0; align-items:flex-start;">
     <div class="threshold-block">
-      <label class="threshold-label">Show DEV reports releasing within the next <input type="number" id="upcomingDaysInput" value="30" min="1" class="threshold-input" /> days</label>
-      <div class="threshold-desc">Controls which reports appear in the "Reports coming your way" table below — includes any already overdue DEV reports too.</div>
+      <label class="threshold-label">Show DB Dev/PBI Dev reports releasing within the next <input type="number" id="upcomingDaysInput" value="30" min="1" class="threshold-input" /> days</label>
+      <div class="threshold-desc">Controls which reports appear in the "Reports coming your way" table below — includes any already overdue DB Dev/PBI Dev reports too.</div>
     </div>
   </div>
 
   <div id="upcomingContainer" class="drilldown" style="display:none; margin-top:0;">
-    <h3>Reports coming your way (DEV, releasing soon)</h3>
-    <p class="upcoming-sub">Reports currently in <b>DEV</b> status with an Expected Release Date inside the window above — so POs aren't surprised by a report landing for testing.</p>
+    <h3>Reports coming your way (DB Dev/PBI Dev, releasing soon)</h3>
+    <p class="upcoming-sub">Reports currently in <b>DB Dev</b> or <b>PBI Dev</b> status with an Expected Release Date inside the window above — so QA testers aren't surprised by a report landing for testing.</p>
     <div class="upload-row" style="padding:0 0 12px;">
-      <label class="threshold-label">Filter by PO:
+      <label class="threshold-label">Filter by QA Tester:
         <select id="upcomingPoFilter" class="threshold-input" style="width:auto; padding:5px 8px;">
-          <option value="">All POs</option>
+          <option value="">All QA Testers</option>
         </select>
       </label>
       <label class="threshold-label">Filter by month:
@@ -390,7 +390,7 @@
       <table id="upcomingTable">
         <thead>
           <tr>
-            <th>PO</th>
+            <th>QA Tester</th>
             <th>Report Name</th>
             <th>Domain</th>
             <th>Status Start</th>
@@ -405,19 +405,19 @@
         <tbody id="upcomingTbody"></tbody>
       </table>
     </div>
-    <div id="upcomingEmpty" class="msg" style="display:none; padding-left:0;">No DEV-status reports expected in this window.</div>
+    <div id="upcomingEmpty" class="msg" style="display:none; padding-left:0;">No DB Dev/PBI Dev-status reports expected in this window.</div>
   </div>
 
   <div id="gapsContainer" class="drilldown" style="display:none; margin-top:0;">
     <h3>Stage progression gaps</h3>
-    <p class="upcoming-sub">A completed stage's Actual Release Date should match the Status Start Date of that report's next-stage record (e.g. DEV's Actual Release Date = QA's Status Start Date). Rows below have a completed stage with no matching next-stage record found — either the next stage hasn't been logged yet, or the dates don't line up.</p>
+    <p class="upcoming-sub">A completed stage's Actual Release Date should match the Status Start Date of that report's next-stage record (e.g. PBI Dev's Actual Release Date = QA's Status Start Date). Rows below have a completed stage with no matching next-stage record found — either the next stage hasn't been logged yet, or the dates don't line up.</p>
     <div style="overflow-x:auto">
       <table id="gapsTable">
         <thead>
           <tr>
             <th>Report Name</th>
             <th>Domain</th>
-            <th>PO</th>
+            <th>QA Tester</th>
             <th>Completed Stage</th>
             <th>Completed On</th>
             <th>Expected Next Stage</th>
@@ -720,15 +720,180 @@ function excelSheetToRows(workbook, sheetName) {
   return XLSX.utils.sheet_to_json(sheet, { defval: null, raw: true });
 }
 
+// ---------------------------------------------------------------------------
+// Live Fact Table / Dim Table derivation from "Combined Delivery Data"
+//
+// This is reverse-engineered directly from the GDM Tracker's own computed
+// Fact Table snapshot (see the workbook's README - Instructions tab for the
+// human-readable version of the same rules) - verified row-for-row against
+// that tracker's reference data every time this logic changes:
+//
+// - Row COUNT per report comes from Current Status (a manual dropdown),
+//   mapped to its position in the pipeline: NOT STARTED = 0 rows, DB Dev =
+//   1, PBI Dev = 2, QA = 3, DPO Approval = 4, RELEASED IN PROD = 5. A report
+//   still Not Started gets zero rows - no placeholder. This is the one
+//   place this app actually trusts Current Status as the source of truth,
+//   because that's how this tracker's own reference Fact Table is built.
+// - Each row's Expected Release Date is that stage's own Expected
+//   Completion Date if filled in - the real target once someone sets it -
+//   falling back to that SAME stage's own Actual Completion Date only when
+//   no Expected date exists yet (the common case for historical/migrated
+//   data). Never a date carried over from a different stage. DPO Approval
+//   has no Actual column (nothing to fall back to); RELEASED IN PROD uses
+//   Confirmed Deployed Date for both its Expected and Actual Release Date,
+//   so it's often blank until someone fills that in - deliberately not
+//   invented.
+// - Each row's Actual Release Date is that stage's own Actual Completion
+//   Date, exactly as recorded, and genuinely blank if not yet filled in -
+//   never guessed or backfilled from a later stage.
+// - Status Start Date chains from the PREVIOUS row's own Expected Release
+//   Date (so it inherits that same Expected-first fallback). The very
+//   first row a report has has no Status Start Date at all.
+//
+// This function reshapes Combined Delivery Data into the same
+// one-row-per-stage factRows / one-row-per-domain-month dimRows shape the
+// rest of the app already expects, so every existing feature (heatmap,
+// drill-down, Coming Your Way, stage gaps) keeps working unchanged.
+// ---------------------------------------------------------------------------
+
+const GDM_STAGE_SEQUENCE = ['DB Dev', 'PBI Dev', 'QA', 'DPO Approval', 'RELEASED IN PROD'];
+const GDM_CURRENT_STATUS_STAGE_COUNT = {
+  'NOT STARTED': 0,
+  'DB Dev': 1,
+  'PBI Dev': 2,
+  'QA': 3,
+  'DPO Approval': 4,
+  'RELEASED IN PROD': 5,
+};
+const GDM_STAGE_EXPECTED_FIELD = {
+  'DB Dev': 'DB Dev Expected Completion Date',
+  'PBI Dev': 'PBI Dev Expected Completion Date',
+  'QA': 'QA Expected Completion Date',
+  'DPO Approval': 'DPO Approval Expected Completion Date',
+  'RELEASED IN PROD': 'Confirmed Deployed Date',
+};
+const GDM_STAGE_ACTUAL_FIELD = {
+  'DB Dev': 'DB Dev Actual Completion Date',
+  'PBI Dev': 'PBI Dev Actual Completion Date',
+  'QA': 'QA Actual Completion Date',
+  'DPO Approval': null, // no Actual column
+  'RELEASED IN PROD': 'Confirmed Deployed Date',
+};
+// Note: Combined Delivery Data also has a Status Assigned Date and an
+// Estimated Completion Date column per stage, but both are
+// manual-tracking-only for now and deliberately NOT read here.
+
+function isValidDate(d) {
+  return d instanceof Date && !isNaN(d);
+}
+
+function deriveFactAndDimFromCombinedData(workbook) {
+  const rows = excelSheetToRows(workbook, 'Combined Delivery Data');
+  const derivedFact = [];
+  const reportRepresentativeDate = {}; // Report Name -> Date, drives Dim Table grouping
+  const reportDomain = {};
+
+  rows.forEach((row) => {
+    const name = (row['Report Name'] || '').toString().trim();
+    if (!name) return;
+    const domain = (row['Domain'] || '').toString().trim() || 'Unmapped - needs domain assignment';
+    const po = row['QA Tester']; // Fact Table's "PO" field intentionally shows the QA Tester's name, not the real PO column
+    const dbDev = row['DB Developer'];
+    const pbiDev = row['PBI Developer'];
+    const schema = row['Schema'];
+    const planDate = isValidDate(row['Plan Delivery Date']) ? row['Plan Delivery Date'] : null;
+
+    reportDomain[name] = domain;
+
+    const currentStatus = (row['Current Status'] || '').toString().trim();
+    const stageCount = GDM_CURRENT_STATUS_STAGE_COUNT[currentStatus] ?? 0;
+
+    if (stageCount === 0) {
+      // Not Started: zero Fact Table rows, per this tracker's own rule.
+      // Still note a representative date via Plan Delivery Date so the
+      // derived Dim Table fallback (used only if no manual Dim Table sheet
+      // exists) can place it on the heatmap.
+      if (planDate) reportRepresentativeDate[name] = planDate;
+      return;
+    }
+
+    const stagesToEmit = GDM_STAGE_SEQUENCE.slice(0, stageCount);
+    let prevExpectedRelease = null; // first row's Status Start Date is always blank
+    let lastKnownDate = null;
+    stagesToEmit.forEach((stage) => {
+      const expField = GDM_STAGE_EXPECTED_FIELD[stage];
+      const actField = GDM_STAGE_ACTUAL_FIELD[stage];
+      const expRaw = expField ? row[expField] : null;
+      const actRaw = actField ? row[actField] : null;
+      const exp = isValidDate(expRaw) ? expRaw : null;
+      const act = isValidDate(actRaw) ? actRaw : null;
+
+      // Expected Completion Date takes priority when filled in - it's the
+      // real target once someone sets it. Falls back to that same stage's
+      // own Actual Completion Date only when no Expected date exists yet
+      // (the common case for historical/migrated data, which usually only
+      // ever got an Actual recorded).
+      const expectedRelease = exp || act || null;
+      const actualRelease = act || null;
+
+      derivedFact.push({
+        'Domain': domain, 'Status': stage, 'Report Name': name,
+        'DB Developers ': dbDev, 'PBI Developers': pbiDev, 'Schema': schema, 'PO': po,
+        'Status Start Date': prevExpectedRelease, 'Expected Release Date': expectedRelease, 'Actual Release Date': actualRelease,
+      });
+
+      prevExpectedRelease = expectedRelease;
+      if (expectedRelease) lastKnownDate = expectedRelease;
+    });
+
+    if (lastKnownDate) {
+      reportRepresentativeDate[name] = lastKnownDate;
+    } else if (planDate) {
+      reportRepresentativeDate[name] = planDate;
+    }
+  });
+
+  const dimMap = {};
+  Object.keys(reportRepresentativeDate).forEach((name) => {
+    const d = reportRepresentativeDate[name];
+    const domain = reportDomain[name];
+    const key = `${domain}|${d.getFullYear()}-${d.getMonth()}`;
+    if (!dimMap[key]) dimMap[key] = { domain, year: d.getFullYear(), month: d.getMonth(), count: 0 };
+    dimMap[key].count += 1;
+  });
+  const derivedDim = Object.values(dimMap).map((e) => ({
+    'Domain': e.domain,
+    'Expected Report Count': e.count,
+    'Expected Release Date': new Date(e.year, e.month + 1, 0), // last day of month
+  }));
+
+  return { factRows: derivedFact, dimRows: derivedDim };
+}
+
 async function loadWorkbookFromBuffer(buf, sourceLabel) {
   const statusEl = document.getElementById('timelineFileStatus');
   const workbook = XLSX.read(buf, { type: 'array', cellDates: true });
 
-  factRows = excelSheetToRows(workbook, 'Fact Table');
-  dimRows = excelSheetToRows(workbook, 'Dim Table');
+  // Fact Table: auto-derived from Combined Delivery Data when present (each
+  // report's stage history, rebuilt from its completion dates), otherwise
+  // read directly from a legacy Fact Table sheet.
+  //
+  // Dim Table: always read directly from the "Dim Table" sheet - this stays
+  // a manually-maintained, editable planning tool (expected report counts
+  // per domain/month), independent of Combined Delivery Data. That's what
+  // lets domains/months with no reports logged yet (future work) still show
+  // up on the heatmap as planned capacity. Only falls back to deriving it
+  // from Combined Delivery Data if no Dim Table sheet exists at all.
+  const hasCombinedData = !!workbook.Sheets['Combined Delivery Data'];
+  const derived = hasCombinedData ? deriveFactAndDimFromCombinedData(workbook) : null;
+
+  factRows = hasCombinedData ? derived.factRows : excelSheetToRows(workbook, 'Fact Table');
+
+  const manualDimRows = excelSheetToRows(workbook, 'Dim Table');
+  dimRows = manualDimRows.length ? manualDimRows : (derived ? derived.dimRows : []);
 
   if (!dimRows.length) {
-    throw new Error('No "Dim Table" sheet found (or it\'s empty) in this file.');
+    throw new Error('No "Dim Table" sheet, and no "Combined Delivery Data" sheet with usable dates, found in this file.');
   }
 
   buildTimeline();
@@ -963,14 +1128,14 @@ document.getElementById('closeDrilldownBtn').addEventListener('click', () => {
 });
 
 // ---------------------------------------------------------------------------
-// "Reports coming your way" — PO-facing view: Status = DEV, releasing soon
+// "Reports coming your way" — QA-Tester-facing view: Status = DB Dev or PBI Dev, releasing soon
 // ---------------------------------------------------------------------------
 
 function populateUpcomingPoFilter(rows) {
   const select = document.getElementById('upcomingPoFilter');
   const current = select.value;
   const pos = Array.from(new Set(rows.map((r) => (r['PO'] || '').toString().trim()).filter(Boolean))).sort();
-  select.innerHTML = '<option value="">All POs</option>' + pos.map((po) => `<option value="${po}">${po}</option>`).join('');
+  select.innerHTML = '<option value="">All QA Testers</option>' + pos.map((po) => `<option value="${po}">${po}</option>`).join('');
   if (pos.includes(current)) select.value = current;
 }
 
@@ -994,7 +1159,7 @@ function renderUpcomingForPO() {
 
   const upcomingAll = factRows.filter((row) => {
     const status = (row['Status'] || '').trim().toLowerCase();
-    if (status !== 'dev') return false;
+    if (status !== 'db dev' && status !== 'pbi dev') return false;
     const expected = row['Expected Release Date'];
     if (!(expected instanceof Date) || isNaN(expected)) return false;
     return expected <= cutoff; // includes anything already overdue too
@@ -1064,13 +1229,14 @@ function renderUpcomingForPO() {
 // Actual Release Date. If no such record exists, flag it as a gap.
 // ---------------------------------------------------------------------------
 
-const STAGE_SEQUENCE = ['not started', 'dev', 'qa', 'dpo approval', 'in production'];
+const STAGE_SEQUENCE = ['not started', 'db dev', 'pbi dev', 'qa', 'dpo approval', 'released in prod'];
 const STAGE_LABELS = {
   'not started': 'Not Started',
-  'dev': 'DEV',
+  'db dev': 'DB Dev',
+  'pbi dev': 'PBI Dev',
   'qa': 'QA',
   'dpo approval': 'DPO Approval',
-  'in production': 'In Production',
+  'released in prod': 'RELEASED IN PROD',
 };
 
 function sameDay(a, b) {
