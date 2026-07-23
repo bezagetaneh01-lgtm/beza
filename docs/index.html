@@ -714,10 +714,18 @@ function computeCellMissing(domain, monthKey, expectedCount) {
   return Math.max(expectedCount - foundCount, 0);
 }
 
-function excelSheetToRows(workbook, sheetName) {
+// skipBannerRow: some sheets (Dim Table, and the legacy Fact Table fallback)
+// have a one-cell instructional banner in row 1 before the real column
+// headers in row 2. Without skipping it, SheetJS treats that banner text as
+// the header row and every real column (Domain, etc.) silently disappears -
+// so every row this function returns has no usable fields. Pass true for
+// those sheets to start header detection at row 2 instead.
+function excelSheetToRows(workbook, sheetName, skipBannerRow) {
   const sheet = workbook.Sheets[sheetName];
   if (!sheet) return [];
-  return XLSX.utils.sheet_to_json(sheet, { defval: null, raw: true });
+  const opts = { defval: null, raw: true };
+  if (skipBannerRow) opts.range = 1; // 0-indexed: start at row 2
+  return XLSX.utils.sheet_to_json(sheet, opts);
 }
 
 // ---------------------------------------------------------------------------
@@ -887,9 +895,9 @@ async function loadWorkbookFromBuffer(buf, sourceLabel) {
   const hasCombinedData = !!workbook.Sheets['Combined Delivery Data'];
   const derived = hasCombinedData ? deriveFactAndDimFromCombinedData(workbook) : null;
 
-  factRows = hasCombinedData ? derived.factRows : excelSheetToRows(workbook, 'Fact Table');
+  factRows = hasCombinedData ? derived.factRows : excelSheetToRows(workbook, 'Fact Table', true);
 
-  const manualDimRows = excelSheetToRows(workbook, 'Dim Table');
+  const manualDimRows = excelSheetToRows(workbook, 'Dim Table', true);
   dimRows = manualDimRows.length ? manualDimRows : (derived ? derived.dimRows : []);
 
   if (!dimRows.length) {
