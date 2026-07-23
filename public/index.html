@@ -923,16 +923,17 @@ document.getElementById('timelineFileInput').addEventListener('change', async (e
   }
 });
 
-// Auto-load a default workbook (data/Template.xlsx, alongside this page) on
-// startup if one is present, so the dashboard shows data immediately without
-// requiring a manual upload. Uploading a file at any time still overrides it.
+// Auto-load a default workbook (data/GDM_Tracker_V18_updated.xlsx, alongside
+// this page) on startup if one is present, so the dashboard shows data
+// immediately without requiring a manual upload. Uploading a file at any
+// time still overrides it.
 async function tryAutoLoadDefaultWorkbook() {
   const statusEl = document.getElementById('timelineFileStatus');
   try {
-    const res = await fetch('data/Template.xlsx', { cache: 'no-store' });
+    const res = await fetch('data/GDM_Tracker_V18_updated.xlsx', { cache: 'no-store' });
     if (!res.ok) return;
     const buf = await res.arrayBuffer();
-    await loadWorkbookFromBuffer(buf, 'Template.xlsx (auto-loaded)');
+    await loadWorkbookFromBuffer(buf, 'GDM_Tracker_V18_updated.xlsx (auto-loaded)');
   } catch (err) {
     // No default file available (or not served) — that's fine, manual upload still works.
   }
