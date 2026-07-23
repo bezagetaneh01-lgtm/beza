@@ -428,6 +428,36 @@
     </div>
     <div id="gapsEmpty" class="msg" style="display:none; padding-left:0;">No gaps found — every completed stage has a matching next-stage record.</div>
   </div>
+
+  <div id="rawTablesContainer" class="drilldown" style="display:none; margin-top:0;">
+    <button class="close-drilldown" id="downloadRawTablesBtn" style="float:right; margin-left:8px;">Download as Excel</button>
+    <button class="close-drilldown" id="toggleRawTablesBtn">Show</button>
+    <h3>Raw Fact Table / Dim Table (for verification)</h3>
+    <p class="upcoming-sub">Every row the app actually computed from the uploaded workbook, exactly as used by the heatmap/drill-down/Coming Your Way/Stage Gaps above — nothing filtered. Collapsed by default since it can be long; click Show to expand, or Download as Excel to save it as a file.</p>
+    <div id="rawTablesBody" style="display:none;">
+      <h4 style="margin:16px 0 8px;">Fact Table (<span id="rawFactCount"></span> rows)</h4>
+      <div style="overflow-x:auto">
+        <table id="rawFactTable">
+          <thead>
+            <tr>
+              <th>Domain</th><th>Status</th><th>Report Name</th><th>DB Developers</th><th>PBI Developers</th>
+              <th>Schema</th><th>PO</th><th>Status Start Date</th><th>Expected Release Date</th><th>Actual Release Date</th>
+            </tr>
+          </thead>
+          <tbody id="rawFactTbody"></tbody>
+        </table>
+      </div>
+      <h4 style="margin:20px 0 8px;">Dim Table (<span id="rawDimCount"></span> rows)</h4>
+      <div style="overflow-x:auto">
+        <table id="rawDimTable">
+          <thead>
+            <tr><th>Domain</th><th>Expected Report Count</th><th>Expected Release Date</th></tr>
+          </thead>
+          <tbody id="rawDimTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -701,17 +731,20 @@ function computeCellRisk(domain, monthKey, today, overdueAmberDays, overdueRedDa
   return worst;
 }
 
-// How many fewer Fact Table rows exist for this domain + month than the Dim
+// How many fewer DISTINCT reports exist for this domain + month than the Dim
 // Table's Expected Report Count says there should be — same calculation the
-// drill-down title uses, surfaced directly on the heatmap cell.
+// drill-down title uses, surfaced directly on the heatmap cell. Counts
+// distinct Report Names, not raw Fact Table rows - a single report can have
+// several stage-rows (DB Dev, PBI Dev, QA...) landing in the same month, and
+// that must still only count once, not once per stage.
 function computeCellMissing(domain, monthKey, expectedCount) {
-  let foundCount = 0;
+  const foundNames = new Set();
   factRows.forEach((row) => {
     if (row['Domain'] !== domain) return;
     if (monthKeyFromDate(row['Expected Release Date']) !== monthKey) return;
-    foundCount++;
+    if (row['Report Name']) foundNames.add(row['Report Name']);
   });
-  return Math.max(expectedCount - foundCount, 0);
+  return Math.max(expectedCount - foundNames.size, 0);
 }
 
 // skipBannerRow: some sheets (Dim Table, and the legacy Fact Table fallback)
@@ -907,6 +940,7 @@ async function loadWorkbookFromBuffer(buf, sourceLabel) {
   buildTimeline();
   renderUpcomingForPO();
   renderStageGaps();
+  renderRawTables();
   statusEl.textContent = `Loaded ${factRows.length} report rows, ${dimRows.length} timeline rows from ${sourceLabel}.`;
   statusEl.classList.remove('error');
   document.getElementById('drilldownContainer').style.display = 'none';
@@ -1073,6 +1107,19 @@ function renderTimelineTable(domainOrder, domainCounts) {
   });
 }
 
+// Ranks a Fact Table row's Status by how far along the pipeline it is, so we
+// can pick the single furthest-along row per report for the drill-down table.
+// Tries the real GDM stage names first (DB Dev, PBI Dev, QA, DPO Approval,
+// RELEASED IN PROD); falls back to the lowercase STAGE_SEQUENCE for any
+// legacy/manual data that doesn't match those exact labels.
+function stageRank(status) {
+  const raw = (status || '').toString().trim();
+  const gdmIdx = GDM_STAGE_SEQUENCE.indexOf(raw);
+  if (gdmIdx !== -1) return gdmIdx;
+  const legacyIdx = STAGE_SEQUENCE.indexOf(raw.toLowerCase());
+  return legacyIdx;
+}
+
 function showDrilldown(domain, monthKey) {
   const matches = factRows.filter((row) => {
     if (row['Domain'] !== domain) return false;
@@ -1080,8 +1127,26 @@ function showDrilldown(domain, monthKey) {
     return key === monthKey;
   });
 
+  // The drill-down table should show one row per report - the latest one,
+  // i.e. whichever stage-row is furthest along its pipeline - rather than
+  // every stage-row a report happens to have in this domain + month.
+  const latestByReport = new Map();
+  matches.forEach((row) => {
+    const name = row['Report Name'];
+    if (!name) return;
+    const existing = latestByReport.get(name);
+    if (!existing || stageRank(row['Status']) >= stageRank(existing['Status'])) {
+      latestByReport.set(name, row);
+    }
+  });
+  const latestRows = Array.from(latestByReport.values());
+
+  // foundCount is the number of DISTINCT reports among the matches, not the
+  // number of stage-rows - a report can appear more than once here (one row
+  // per stage it has reached that happens to land in this month), and that
+  // must still only count once against the Dim Table's Expected Report Count.
   const expectedCount = (domainCounts[domain] && domainCounts[domain][monthKey]) || 0;
-  const foundCount = matches.length;
+  const foundCount = new Set(matches.map((row) => row['Report Name']).filter(Boolean)).size;
   const missingCount = Math.max(expectedCount - foundCount, 0);
   const extraCount = Math.max(foundCount - expectedCount, 0);
 
@@ -1101,7 +1166,7 @@ function showDrilldown(domain, monthKey) {
 
   const tbody = document.getElementById('drilldownTbody');
   tbody.innerHTML = '';
-  matches.forEach((row) => {
+  latestRows.forEach((row) => {
     const tr = document.createElement('tr');
     const fmt = (d) => (d instanceof Date && !isNaN(d) ? d.toLocaleDateString() : (d || ''));
     const risk = classifyRisk(row, today);
@@ -1318,6 +1383,73 @@ function renderStageGaps() {
   document.getElementById('gapsTable').style.display = gaps.length ? 'table' : 'none';
   document.getElementById('gapsEmpty').style.display = gaps.length ? 'none' : 'block';
 }
+
+// ---------------------------------------------------------------------------
+// Raw Fact Table / Dim Table view - a plain, unfiltered dump of exactly what
+// the app computed, for verifying the derivation logic directly instead of
+// having to cross-check the heatmap/drill-down by eye. Nothing here writes
+// back to any file; "Download as Excel" just saves a fresh workbook built
+// from the in-memory factRows/dimRows using SheetJS, entirely client-side.
+// ---------------------------------------------------------------------------
+
+function renderRawTables() {
+  const fmt = (d) => (d instanceof Date && !isNaN(d) ? d.toLocaleDateString() : '');
+
+  document.getElementById('rawFactCount').textContent = factRows.length;
+  const factTbody = document.getElementById('rawFactTbody');
+  factTbody.innerHTML = '';
+  factRows.forEach((row) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${row['Domain'] || ''}</td>
+      <td>${row['Status'] || ''}</td>
+      <td>${row['Report Name'] || ''}</td>
+      <td>${row['DB Developers '] ?? row['DB Developers'] ?? ''}</td>
+      <td>${row['PBI Developers'] || ''}</td>
+      <td>${row['Schema'] || ''}</td>
+      <td>${row['PO'] || ''}</td>
+      <td>${fmt(row['Status Start Date'])}</td>
+      <td>${fmt(row['Expected Release Date'])}</td>
+      <td>${fmt(row['Actual Release Date'])}</td>
+    `;
+    factTbody.appendChild(tr);
+  });
+
+  document.getElementById('rawDimCount').textContent = dimRows.length;
+  const dimTbody = document.getElementById('rawDimTbody');
+  dimTbody.innerHTML = '';
+  dimRows.forEach((row) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${row['Domain'] || ''}</td>
+      <td>${row['Expected Report Count'] ?? ''}</td>
+      <td>${fmt(row['Expected Release Date'])}</td>
+    `;
+    dimTbody.appendChild(tr);
+  });
+
+  document.getElementById('rawTablesContainer').style.display = 'block';
+}
+
+document.getElementById('toggleRawTablesBtn').addEventListener('click', () => {
+  const body = document.getElementById('rawTablesBody');
+  const btn = document.getElementById('toggleRawTablesBtn');
+  const showing = body.style.display !== 'none';
+  body.style.display = showing ? 'none' : 'block';
+  btn.textContent = showing ? 'Show' : 'Hide';
+});
+
+document.getElementById('downloadRawTablesBtn').addEventListener('click', () => {
+  const factCols = ['Domain', 'Status', 'Report Name', 'DB Developers ', 'PBI Developers', 'Schema', 'PO', 'Status Start Date', 'Expected Release Date', 'Actual Release Date'];
+  const factSheet = XLSX.utils.json_to_sheet(factRows, { header: factCols });
+  const dimCols = ['Domain', 'Expected Report Count', 'Expected Release Date'];
+  const dimSheet = XLSX.utils.json_to_sheet(dimRows, { header: dimCols });
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, factSheet, 'Fact Table');
+  XLSX.utils.book_append_sheet(wb, dimSheet, 'Dim Table');
+  XLSX.writeFile(wb, 'Fact_Dim_Table_Computed.xlsx');
+});
 
 (async function init() {
   try {
