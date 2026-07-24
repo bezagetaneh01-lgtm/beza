@@ -241,6 +241,9 @@
   .risk-badge.overdue { background: #f28b82; color: #3a0a06; }
   .risk-badge.ontrack { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); }
   .risk-badge.released { background: var(--green); color: #06280f; }
+  .risk-badge.completed { background: #a8c7fa; color: #062040; }
+  .risk-badge.rework { background: #fdd663; color: #3a2c00; }
+  .risk-badge.blocked { background: #f6ad55; color: #3a1e00; }
 
   .upcoming-sub { color: var(--muted); font-size: 12px; margin: -4px 0 14px; }
 
@@ -274,6 +277,7 @@
 <div class="tabs">
   <button class="tab-btn active" id="tabJiraBtn">Jira Tickets</button>
   <button class="tab-btn" id="tabTimelineBtn">Migration Timeline</button>
+  <button class="tab-btn" id="tabDataQualityBtn">Tracker Data Quality</button>
 </div>
 
 <div id="jiraPanel">
@@ -349,11 +353,11 @@
           <tr>
             <th>Report Name</th>
             <th>QA Tester</th>
-            <th>Status</th>
+            <th>Stage</th>
             <th>Status Start</th>
-            <th>Expected Release</th>
-            <th>Actual Release</th>
-            <th>Risk</th>
+            <th>Expected Completion</th>
+            <th>Actual Completion</th>
+            <th>Status</th>
             <th>DB Developer</th>
             <th>PBI Developer</th>
             <th>Schema</th>
@@ -393,10 +397,11 @@
             <th>QA Tester</th>
             <th>Report Name</th>
             <th>Domain</th>
+            <th>Stage</th>
             <th>Status Start</th>
-            <th>Expected Release</th>
-            <th>Days Until Release</th>
-            <th>Risk</th>
+            <th>Expected Completion</th>
+            <th>Days Until Completion</th>
+            <th>Status</th>
             <th>DB Developer</th>
             <th>PBI Developer</th>
             <th>Schema</th>
@@ -406,27 +411,6 @@
       </table>
     </div>
     <div id="upcomingEmpty" class="msg" style="display:none; padding-left:0;">No DB Dev/PBI Dev-status reports expected in this window.</div>
-  </div>
-
-  <div id="gapsContainer" class="drilldown" style="display:none; margin-top:0;">
-    <h3>Stage progression gaps</h3>
-    <p class="upcoming-sub">A completed stage's Actual Release Date should match the Status Start Date of that report's next-stage record (e.g. PBI Dev's Actual Release Date = QA's Status Start Date). Rows below have a completed stage with no matching next-stage record found — either the next stage hasn't been logged yet, or the dates don't line up.</p>
-    <div style="overflow-x:auto">
-      <table id="gapsTable">
-        <thead>
-          <tr>
-            <th>Report Name</th>
-            <th>Domain</th>
-            <th>QA Tester</th>
-            <th>Completed Stage</th>
-            <th>Completed On</th>
-            <th>Expected Next Stage</th>
-          </tr>
-        </thead>
-        <tbody id="gapsTbody"></tbody>
-      </table>
-    </div>
-    <div id="gapsEmpty" class="msg" style="display:none; padding-left:0;">No gaps found — every completed stage has a matching next-stage record.</div>
   </div>
 
   <div id="rawTablesContainer" class="drilldown" style="display:none; margin-top:0;">
@@ -457,6 +441,115 @@
         </table>
       </div>
     </div>
+  </div>
+</div>
+
+<div id="dataQualityPanel" style="display:none">
+  <div class="notice-banner" style="background:#fff8e1; border:1px solid #fbc02d; color:#3a2c00; padding:10px 14px; border-radius:6px; margin-bottom:14px; font-size:14px;">
+    <strong>Tracker data-quality checks:</strong> the tables below flag places where the Combined Delivery Data sheet in the GDM Tracker looks like it was filled in incorrectly or incompletely. Use these to clean up the tracker — they don't affect the Migration Timeline tab's numbers beyond what's already noted in each table's description.
+  </div>
+
+  <div id="gapsContainer" class="drilldown" style="display:none; margin-top:0;">
+    <h3>Stage progression gaps</h3>
+    <p class="upcoming-sub">A completed stage's Actual Release Date should match the Status Start Date of that report's next-stage record (e.g. PBI Dev's Actual Release Date = QA's Status Start Date). Rows below have a completed stage with no matching next-stage record found — either the next stage hasn't been logged yet, or the dates don't line up.</p>
+    <div style="overflow-x:auto">
+      <table id="gapsTable">
+        <thead>
+          <tr>
+            <th>Report Name</th>
+            <th>Domain</th>
+            <th>QA Tester</th>
+            <th>Completed Stage</th>
+            <th>Completed On</th>
+            <th>Expected Next Stage</th>
+          </tr>
+        </thead>
+        <tbody id="gapsTbody"></tbody>
+      </table>
+    </div>
+    <div id="gapsEmpty" class="msg" style="display:none; padding-left:0;">No gaps found — every completed stage has a matching next-stage record.</div>
+  </div>
+
+  <div id="planMonthMismatchContainer" class="drilldown" style="display:none; margin-top:0;">
+    <h3>Plan Delivery Month mismatches</h3>
+    <p class="upcoming-sub">A report's Plan Delivery Month is expected to match the calendar month of its furthest-reached stage's Expected Release Date. Rows below disagree — the heatmap places these reports by Plan Delivery Month instead until the mismatch is resolved.</p>
+    <div style="overflow-x:auto">
+      <table id="planMonthMismatchTable">
+        <thead>
+          <tr>
+            <th>Report Name</th>
+            <th>Domain</th>
+            <th>QA Tester</th>
+            <th>Plan Delivery Month</th>
+            <th>Latest Stage Reached</th>
+            <th>Latest Stage Expected Date</th>
+          </tr>
+        </thead>
+        <tbody id="planMonthMismatchTbody"></tbody>
+      </table>
+    </div>
+    <div id="planMonthMismatchEmpty" class="msg" style="display:none; padding-left:0;">No mismatches found — every report's Plan Delivery Month agrees with its latest stage's Expected Release Date.</div>
+  </div>
+
+  <div id="missingConfirmedDeployedContainer" class="drilldown" style="display:none; margin-top:0;">
+    <h3>Missing Confirmed Deployed Date</h3>
+    <p class="upcoming-sub">Combined Delivery Data's "Status Flag" column marks a report "Delivered" purely based on Current Status = RELEASED IN PROD - it doesn't check Confirmed Deployed Date at all. Rows below are marked Delivered but have no Confirmed Deployed Date on record - go fill it in on Combined Delivery Data.</p>
+    <div style="overflow-x:auto">
+      <table id="missingConfirmedDeployedTable">
+        <thead>
+          <tr>
+            <th>Report Name</th>
+            <th>Domain</th>
+            <th>QA Tester</th>
+          </tr>
+        </thead>
+        <tbody id="missingConfirmedDeployedTbody"></tbody>
+      </table>
+    </div>
+    <div id="missingConfirmedDeployedEmpty" class="msg" style="display:none; padding-left:0;">No gaps found — every report marked Delivered has a Confirmed Deployed Date on record.</div>
+  </div>
+
+  <div id="statusActualMismatchContainer" class="drilldown" style="display:none; margin-top:0;">
+    <h3>Current Status / Actual Completion Date mismatches</h3>
+    <p class="upcoming-sub">Current Status says a report has reached a given stage - which implies every stage before it is done. Rows below have a Current Status implying a prior stage finished, but that prior stage's own Actual Completion Date column is still blank - either that date was never entered, or the dropdown was advanced by mistake.</p>
+    <div style="overflow-x:auto">
+      <table id="statusActualMismatchTable">
+        <thead>
+          <tr>
+            <th>Report Name</th>
+            <th>Domain</th>
+            <th>QA Tester</th>
+            <th>Current Status</th>
+            <th>Missing Actual For Stage</th>
+            <th>That Stage's Expected Completion Date</th>
+          </tr>
+        </thead>
+        <tbody id="statusActualMismatchTbody"></tbody>
+      </table>
+    </div>
+    <div id="statusActualMismatchEmpty" class="msg" style="display:none; padding-left:0;">No mismatches found — every report's Current Status is backed up by an Actual Completion Date on its prior stage.</div>
+  </div>
+
+  <div id="currentStatusStageMismatchContainer" class="drilldown" style="display:none; margin-top:0;">
+    <h3>Current Status lagging behind completion</h3>
+    <p class="upcoming-sub">Current Status = QA is supposed to mean the report is currently sitting in QA - but if QA Actual Completion Date is already filled in, QA itself is done and the dropdown just hasn't been advanced to DPO Approval yet. Rows below are treated as having reached DPO Approval anyway (same idea as Confirmed Deployed Date implying RELEASED IN PROD) - go update Current Status on Combined Delivery Data to match.</p>
+    <div style="overflow-x:auto">
+      <table id="currentStatusStageMismatchTable">
+        <thead>
+          <tr>
+            <th>Report Name</th>
+            <th>Domain</th>
+            <th>QA Tester</th>
+            <th>Current Status</th>
+            <th>Completed Stage</th>
+            <th>Completed On</th>
+            <th>Treated As</th>
+          </tr>
+        </thead>
+        <tbody id="currentStatusStageMismatchTbody"></tbody>
+      </table>
+    </div>
+    <div id="currentStatusStageMismatchEmpty" class="msg" style="display:none; padding-left:0;">No mismatches found — no report's Current Status is lagging behind a completed stage.</div>
   </div>
 </div>
 
@@ -614,17 +707,19 @@ document.getElementById('jqlInput').addEventListener('keydown', (e) => {
 // Tabs
 // ---------------------------------------------------------------------------
 
-document.getElementById('tabJiraBtn').addEventListener('click', () => {
-  document.getElementById('tabJiraBtn').classList.add('active');
-  document.getElementById('tabTimelineBtn').classList.remove('active');
-  document.getElementById('jiraPanel').style.display = 'block';
-  document.getElementById('timelinePanel').style.display = 'none';
-});
-document.getElementById('tabTimelineBtn').addEventListener('click', () => {
-  document.getElementById('tabTimelineBtn').classList.add('active');
-  document.getElementById('tabJiraBtn').classList.remove('active');
-  document.getElementById('timelinePanel').style.display = 'block';
-  document.getElementById('jiraPanel').style.display = 'none';
+const TAB_BUTTON_TO_PANEL = {
+  tabJiraBtn: 'jiraPanel',
+  tabTimelineBtn: 'timelinePanel',
+  tabDataQualityBtn: 'dataQualityPanel',
+};
+Object.keys(TAB_BUTTON_TO_PANEL).forEach((btnId) => {
+  document.getElementById(btnId).addEventListener('click', () => {
+    Object.entries(TAB_BUTTON_TO_PANEL).forEach(([otherBtnId, panelId]) => {
+      const isActive = otherBtnId === btnId;
+      document.getElementById(otherBtnId).classList.toggle('active', isActive);
+      document.getElementById(panelId).style.display = isActive ? 'block' : 'none';
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -636,6 +731,11 @@ let dimRows = [];       // parsed 'Dim Table' rows
 let monthKeys = [];     // e.g. ['2026-04', '2026-05', ...] sorted chronologically
 let monthLabels = {};   // '2026-04' -> 'Apr-26'
 let domainCounts = {};  // domain -> { month key -> expected count, from Dim Table }
+let planMonthMismatches = []; // reports whose Plan Delivery Month disagrees with their latest stage's Expected Release Date
+let reportPlanMonthKey = {}; // Report Name -> month key ('2026-05'), from Plan Delivery Month - the priority source for Dim Table month lookups
+let missingConfirmedDeployedDate = []; // reports whose Status Flag = Delivered (Current Status = RELEASED IN PROD) but Confirmed Deployed Date is blank
+let statusActualMismatches = []; // reports whose Current Status implies a prior stage completed, but that prior stage's own Actual Completion Date is blank
+let currentStatusStageMismatches = []; // reports whose Current Status = QA but QA Actual Completion Date is already filled in - should be DPO Approval
 
 function monthKeyFromDate(d) {
   if (!(d instanceof Date) || isNaN(d)) return null;
@@ -643,6 +743,20 @@ function monthKeyFromDate(d) {
 }
 function monthLabelFromDate(d) {
   return d.toLocaleString('en-US', { month: 'short' }) + '-' + String(d.getFullYear()).slice(-2);
+}
+
+// Which month a Fact Table row counts toward for Dim Table lookups (heatmap
+// found/missing counts, drill-down membership, cell risk). Plan Delivery
+// Month is the priority source - a report stays in ONE month bucket (the one
+// it was planned for) for its whole lifecycle, rather than splitting across
+// months as its individual stages complete on different dates. Falls back to
+// the row's own Expected Release Date only when there's no Plan Delivery
+// Month mapping at all (e.g. a legacy Fact-Table-only upload with no
+// Combined Delivery Data to read Plan Delivery Month from).
+function rowMonthKey(row) {
+  const planKey = reportPlanMonthKey[row['Report Name']];
+  if (planKey) return planKey;
+  return monthKeyFromDate(row['Expected Release Date']);
 }
 
 // ---------------------------------------------------------------------------
@@ -682,8 +796,27 @@ function currentMonthKey(today) {
 function classifyRisk(row, today) {
   const expected = row['Expected Release Date'];
   const actual = row['Actual Release Date'];
+  const stage = (row['Status'] || '').toString().trim();
+  // A Blocked report always shows "Blocked", regardless of whether this
+  // stage's own Actual Completion Date happens to be filled in, and
+  // regardless of whether a "Blocked - Needs Return To" target is set. A
+  // filled Actual Completion Date on a blocked report is either stale (left
+  // over from an earlier, now-invalidated pass being reworked) or simply
+  // doesn't matter - the report needs attention either way and shouldn't
+  // read as "Completed"/"Released"/"Rework" instead of "Blocked".
+  if (row['Blocked']) {
+    return { level: 'blocked', label: 'Blocked' };
+  }
   if (actual instanceof Date && !isNaN(actual)) {
-    return { level: 'released', label: 'Released' };
+    // A report is only truly "released in prod" once Confirmed Deployed Date
+    // is filled in - which is exactly what DPO Approval's and RELEASED IN
+    // PROD's own Actual Release Date fields both represent (see
+    // GDM_STAGE_ACTUAL_FIELD). Every other stage finishing (DB Dev, PBI Dev,
+    // QA) just means that stage is done, not that the report has shipped.
+    if (stage === 'DPO Approval' || stage === 'RELEASED IN PROD') {
+      return { level: 'released', label: 'Released' };
+    }
+    return { level: 'completed', label: 'Completed' };
   }
   if (!(expected instanceof Date) || isNaN(expected)) {
     return { level: 'ontrack', label: 'On track' };
@@ -709,7 +842,7 @@ function computeCellRisk(domain, monthKey, today, overdueAmberDays, overdueRedDa
   let worst = null;
   factRows.forEach((row) => {
     if (row['Domain'] !== domain) return;
-    if (monthKeyFromDate(row['Expected Release Date']) !== monthKey) return;
+    if (rowMonthKey(row) !== monthKey) return;
 
     const actual = row['Actual Release Date'];
     if (actual instanceof Date && !isNaN(actual)) return; // already released, no flag
@@ -741,7 +874,7 @@ function computeCellMissing(domain, monthKey, expectedCount) {
   const foundNames = new Set();
   factRows.forEach((row) => {
     if (row['Domain'] !== domain) return;
-    if (monthKeyFromDate(row['Expected Release Date']) !== monthKey) return;
+    if (rowMonthKey(row) !== monthKey) return;
     if (row['Report Name']) foundNames.add(row['Report Name']);
   });
   return Math.max(expectedCount - foundNames.size, 0);
@@ -764,29 +897,40 @@ function excelSheetToRows(workbook, sheetName, skipBannerRow) {
 // ---------------------------------------------------------------------------
 // Live Fact Table / Dim Table derivation from "Combined Delivery Data"
 //
-// This is reverse-engineered directly from the GDM Tracker's own computed
-// Fact Table snapshot (see the workbook's README - Instructions tab for the
-// human-readable version of the same rules) - verified row-for-row against
-// that tracker's reference data every time this logic changes:
+// The workbook's own "Fact Table" sheet is JUST a static reference snapshot -
+// it can lag behind whatever's currently in Combined Delivery Data (edits
+// made after that snapshot was last generated, for example) and is NOT
+// treated as ground truth here. This app always recomputes fresh from
+// Combined Delivery Data on every load, which is the more current and
+// correct behavior even when it disagrees with that snapshot. The rules
+// below are the documented business logic (see the workbook's own README -
+// Instructions tab too), not a byte-for-byte mimicry of that snapshot:
 //
 // - Row COUNT per report comes from Current Status (a manual dropdown),
 //   mapped to its position in the pipeline: NOT STARTED = 0 rows, DB Dev =
 //   1, PBI Dev = 2, QA = 3, DPO Approval = 4, RELEASED IN PROD = 5. A report
 //   still Not Started gets zero rows - no placeholder. This is the one
-//   place this app actually trusts Current Status as the source of truth,
-//   because that's how this tracker's own reference Fact Table is built.
+//   place this app actually trusts Current Status as the source of truth.
+//   The Current Status dropdown no longer offers "RELEASED IN PROD" as a
+//   selectable option - a report is expected to stay tagged "DPO Approval"
+//   even after it ships, and instead signal being live via a filled-in
+//   Confirmed Deployed Date. So: Current Status = "DPO Approval" AND a
+//   Confirmed Deployed Date is present -> treated as RELEASED IN PROD (5
+//   rows) anyway. The literal "RELEASED IN PROD" status value is still
+//   honored too, for older rows that already have it set.
 // - Each row's Expected Release Date is that stage's own Expected
 //   Completion Date if filled in - the real target once someone sets it -
 //   falling back to that SAME stage's own Actual Completion Date only when
 //   no Expected date exists yet (the common case for historical/migrated
-//   data). Never a date carried over from a different stage. DPO Approval
-//   has no Actual column (nothing to fall back to); RELEASED IN PROD uses
-//   Confirmed Deployed Date for both its Expected and Actual Release Date,
-//   so it's often blank until someone fills that in - deliberately not
-//   invented.
+//   data). Never a date carried over from a different stage.
 // - Each row's Actual Release Date is that stage's own Actual Completion
 //   Date, exactly as recorded, and genuinely blank if not yet filled in -
-//   never guessed or backfilled from a later stage.
+//   never guessed or backfilled from a later stage. There's no column
+//   literally named "DPO Approval Actual Completion Date" - Confirmed
+//   Deployed Date is its real-world equivalent, so it's used as DPO
+//   Approval's Actual field too. RELEASED IN PROD uses that same Confirmed
+//   Deployed Date for both its own Expected and Actual Release Date, so it's
+//   often blank until someone fills that in - deliberately not invented.
 // - Status Start Date chains from the PREVIOUS row's own Expected Release
 //   Date (so it inherits that same Expected-first fallback). The very
 //   first row a report has has no Status Start Date at all.
@@ -817,7 +961,10 @@ const GDM_STAGE_ACTUAL_FIELD = {
   'DB Dev': 'DB Dev Actual Completion Date',
   'PBI Dev': 'PBI Dev Actual Completion Date',
   'QA': 'QA Actual Completion Date',
-  'DPO Approval': null, // no Actual column
+  // There's no column literally named "DPO Approval Actual Completion Date" -
+  // Confirmed Deployed Date is its real-world equivalent (set precisely when
+  // DPO Approval actually completes), so it's used here too.
+  'DPO Approval': 'Confirmed Deployed Date',
   'RELEASED IN PROD': 'Confirmed Deployed Date',
 };
 // Note: Combined Delivery Data also has a Status Assigned Date and an
@@ -828,11 +975,70 @@ function isValidDate(d) {
   return d instanceof Date && !isNaN(d);
 }
 
+const GDM_MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+// Combined Delivery Data has no "Plan Delivery Date" column - only "Plan
+// Delivery Month", a plain month name with no year (e.g. "August"). Resolve
+// it to an actual date by picking whichever of last/this/next year puts the
+// resulting date CLOSEST to today - not just "next upcoming". Plan Delivery
+// Month is now the priority column for Dim Table month lookups across every
+// report (not just Not Started ones), including already-shipped reports
+// whose planned month is well in the past - "next upcoming" would incorrectly
+// push a report planned for, say, May into May of NEXT year once today is
+// past May, which is exactly backwards for a report that already shipped in
+// May this year.
+function planDeliveryMonthToDate(monthText, today) {
+  const name = (monthText || '').toString().trim();
+  if (!name) return null;
+  const idx = GDM_MONTH_NAMES.findIndex((m) => m.toLowerCase() === name.toLowerCase());
+  if (idx === -1) return null;
+  const candidates = [today.getFullYear() - 1, today.getFullYear(), today.getFullYear() + 1].map(
+    (year) => new Date(year, idx + 1, 0) // last day of that month
+  );
+  candidates.sort((a, b) => Math.abs(a - today) - Math.abs(b - today));
+  return candidates[0];
+}
+
 function deriveFactAndDimFromCombinedData(workbook) {
   const rows = excelSheetToRows(workbook, 'Combined Delivery Data');
   const derivedFact = [];
   const reportRepresentativeDate = {}; // Report Name -> Date, drives Dim Table grouping
   const reportDomain = {};
+  const today = startOfToday();
+  // Data-integrity check: a report's Plan Delivery Month is expected to match
+  // the calendar month of its latest/furthest reached stage's Expected
+  // Release Date. When they disagree, that's flagged here for the "Plan
+  // Delivery Month mismatches" table, and Plan Delivery Month's own resolved
+  // date is used as the fallback grouping date instead of the (apparently
+  // stale or wrong) stage date - see below.
+  const planMonthMismatches = [];
+  const reportPlanMonthKeyLocal = {}; // Report Name -> month key, from Plan Delivery Month
+  // Data-integrity check: Combined Delivery Data's "Status Flag" column is a
+  // formula that resolves to "Delivered" precisely when Current Status =
+  // "RELEASED IN PROD" (literally) - nothing else. That formula doesn't
+  // check Confirmed Deployed Date at all, so a report can be marked
+  // "Delivered" there while Confirmed Deployed Date is still blank. Flagged
+  // here rather than trusting the sheet's own (possibly stale/uncalculated)
+  // "Status Flag" cell text, since this app can't evaluate Excel formulas.
+  const missingConfirmedDeployedDate = [];
+  // Data-integrity check: Current Status says a report has REACHED a given
+  // stage (that's what drives its row count, per the rule above), but if the
+  // stage immediately before it has no Actual Completion Date on record, that
+  // implies the report was advanced without ever recording that the prior
+  // stage actually finished - either someone forgot to fill in that date, or
+  // the dropdown was bumped ahead by mistake. Capped before RELEASED IN PROD
+  // (DB Dev has no prior stage to check at all, and RELEASED IN PROD's
+  // "prior stage" check would just duplicate the Missing Confirmed Deployed
+  // Date table above, since RELEASED IN PROD's own prior-stage Actual field
+  // is that same Confirmed Deployed Date column).
+  const statusActualMismatches = [];
+  // Data-integrity check: Current Status = "QA" is supposed to mean the
+  // report is CURRENTLY sitting in QA, not that QA has already finished -
+  // but if QA Actual Completion Date is already filled in, QA itself is
+  // done and the dropdown just hasn't been advanced to DPO Approval yet.
+  // Flagged here, and the app treats the report as having reached DPO
+  // Approval anyway (same idea as the existing DPO Approval + Confirmed
+  // Deployed Date -> RELEASED IN PROD inference above).
+  const currentStatusStageMismatches = [];
 
   rows.forEach((row) => {
     const name = (row['Report Name'] || '').toString().trim();
@@ -842,16 +1048,64 @@ function deriveFactAndDimFromCombinedData(workbook) {
     const dbDev = row['DB Developer'];
     const pbiDev = row['PBI Developer'];
     const schema = row['Schema'];
-    const planDate = isValidDate(row['Plan Delivery Date']) ? row['Plan Delivery Date'] : null;
+    const isBlocked = (row['Blocked?'] || '').toString().trim().toLowerCase() === 'yes';
+    const planDate = planDeliveryMonthToDate(row['Plan Delivery Month'], today);
+
+    if ((row['Current Status'] || '').toString().trim() === 'RELEASED IN PROD' && !isValidDate(row['Confirmed Deployed Date'])) {
+      missingConfirmedDeployedDate.push({ 'Report Name': name, 'Domain': domain, 'PO': po });
+    }
+
+    // Plan Delivery Month is the priority column for which month a report
+    // counts toward in the Dim Table lookup (heatmap found/missing counts,
+    // drill-down, and cell risk) - not whichever month an individual stage's
+    // Expected Release Date happens to fall in. This keeps a report in ONE
+    // month bucket (the one it was planned for) throughout its whole
+    // lifecycle, rather than splitting across months as it progresses.
+    if (planDate) reportPlanMonthKeyLocal[name] = monthKeyFromDate(planDate);
 
     reportDomain[name] = domain;
 
     const currentStatus = (row['Current Status'] || '').toString().trim();
-    const stageCount = GDM_CURRENT_STATUS_STAGE_COUNT[currentStatus] ?? 0;
+    const confirmedDeployedDate = row['Confirmed Deployed Date'];
+    const qaActualCompletionDate = row['QA Actual Completion Date'];
+    const neededReturnTo = (row['Blocked - Needs Return To'] || '').toString().trim();
+    // When a report is Blocked with a specific "Blocked - Needs Return To"
+    // stage set, THAT stage is the report's real current stage for row-count
+    // purposes - Current Status itself may not have been rolled back yet to
+    // reflect it (Combined Delivery Data's "Blocked At" formula shows
+    // "Blocked - needs <that stage> to fix" in this case, rather than
+    // "Blocked at <Current Status>"). Falls back to the literal Current
+    // Status otherwise (not blocked, or blocked with no return-to target).
+    const effectiveStatus = (isBlocked && neededReturnTo) ? neededReturnTo : currentStatus;
+    let stageCount = GDM_CURRENT_STATUS_STAGE_COUNT[effectiveStatus] ?? 0;
+    if (effectiveStatus === 'QA' && isValidDate(qaActualCompletionDate) && !isBlocked) {
+      // QA itself is already done (Actual Completion Date filled in), but
+      // Current Status hasn't been advanced past QA yet - treat as DPO
+      // Approval instead of stopping at QA, and flag the mismatch. Skipped
+      // entirely when the report is Blocked - Combined Delivery Data's own
+      // "Blocked At" formula (`Blocked at <Current Status>` when there's no
+      // Needs Return To target) means Current Status is deliberately
+      // accurate: the report is genuinely stuck at that stage because it's
+      // blocked, not because someone forgot to advance the dropdown.
+      stageCount = GDM_CURRENT_STATUS_STAGE_COUNT['DPO Approval'];
+      currentStatusStageMismatches.push({
+        'Report Name': name,
+        'Domain': domain,
+        'PO': po,
+        'Current Status': currentStatus,
+        'Implied Stage': 'DPO Approval',
+        'Completed Stage': 'QA',
+        'Completed On': qaActualCompletionDate,
+      });
+    }
+    if (effectiveStatus === 'DPO Approval' && isValidDate(confirmedDeployedDate)) {
+      // Dropdown no longer offers "RELEASED IN PROD" - infer it instead.
+      stageCount = GDM_CURRENT_STATUS_STAGE_COUNT['RELEASED IN PROD'];
+    }
 
     if (stageCount === 0) {
       // Not Started: zero Fact Table rows, per this tracker's own rule.
-      // Still note a representative date via Plan Delivery Date so the
+      // Still note a representative date via Plan Delivery Month so the
       // derived Dim Table fallback (used only if no manual Dim Table sheet
       // exists) can place it on the heatmap.
       if (planDate) reportRepresentativeDate[name] = planDate;
@@ -861,6 +1115,21 @@ function deriveFactAndDimFromCombinedData(workbook) {
     const stagesToEmit = GDM_STAGE_SEQUENCE.slice(0, stageCount);
     let prevExpectedRelease = null; // first row's Status Start Date is always blank
     let lastKnownDate = null;
+    // Raw Expected Completion Date column value for the furthest stage that
+    // actually HAS one - NOT the Expected-or-Actual fallback used everywhere
+    // else in this function. This is what the Plan Delivery Month mismatch
+    // check below compares against: purely Combined Delivery Data's own
+    // "Plan Delivery Month" column vs. that same stage's own Expected
+    // Completion Date column (e.g. "QA Expected Completion Date"). Capped at
+    // DPO Approval - RELEASED IN PROD has no true Expected Completion Date
+    // column of its own (Confirmed Deployed Date is a deployment-confirmation
+    // field, not an Expected Completion Date), so a report that's reached
+    // RELEASED IN PROD is still compared against its DPO Approval Expected
+    // Completion Date. If that column is blank, there's nothing to compare -
+    // no flag either way.
+    let latestStageRawExpected = null;
+    let latestStageWithExpected = null;
+    const actByStage = {};
     stagesToEmit.forEach((stage) => {
       const expField = GDM_STAGE_EXPECTED_FIELD[stage];
       const actField = GDM_STAGE_ACTUAL_FIELD[stage];
@@ -868,6 +1137,7 @@ function deriveFactAndDimFromCombinedData(workbook) {
       const actRaw = actField ? row[actField] : null;
       const exp = isValidDate(expRaw) ? expRaw : null;
       const act = isValidDate(actRaw) ? actRaw : null;
+      actByStage[stage] = act;
 
       // Expected Completion Date takes priority when filled in - it's the
       // real target once someone sets it. Falls back to that same stage's
@@ -881,13 +1151,54 @@ function deriveFactAndDimFromCombinedData(workbook) {
         'Domain': domain, 'Status': stage, 'Report Name': name,
         'DB Developers ': dbDev, 'PBI Developers': pbiDev, 'Schema': schema, 'PO': po,
         'Status Start Date': prevExpectedRelease, 'Expected Release Date': expectedRelease, 'Actual Release Date': actualRelease,
+        'Blocked': isBlocked, 'BlockedReturnTo': neededReturnTo || null,
       });
 
       prevExpectedRelease = expectedRelease;
       if (expectedRelease) lastKnownDate = expectedRelease;
+      if (stage !== 'RELEASED IN PROD') {
+        // Overwritten each loop up through DPO Approval; never advances past
+        // it, since RELEASED IN PROD has no true Expected Completion Date.
+        latestStageRawExpected = exp;
+        latestStageWithExpected = stage;
+      }
     });
 
-    if (lastKnownDate) {
+    // Current Status / Actual Completion Date mismatch check: the stage this
+    // report is CURRENTLY sitting in (the last one emitted above) implies
+    // every stage before it is done - so that immediately-prior stage should
+    // have its own Actual Completion Date filled in. If not, flag it.
+    const currentStageName = stagesToEmit[stagesToEmit.length - 1];
+    const currentStageIdx = GDM_STAGE_SEQUENCE.indexOf(currentStageName);
+    const priorStageName = currentStageIdx > 0 ? GDM_STAGE_SEQUENCE[currentStageIdx - 1] : null;
+    if (priorStageName && currentStageName !== 'RELEASED IN PROD' && !actByStage[priorStageName]) {
+      const priorExpField = GDM_STAGE_EXPECTED_FIELD[priorStageName];
+      statusActualMismatches.push({
+        'Report Name': name,
+        'Domain': domain,
+        'PO': po,
+        'Current Status': currentStatus,
+        'Missing Actual For Stage': priorStageName,
+        'Prior Stage Expected Completion Date': priorExpField ? (isValidDate(row[priorExpField]) ? row[priorExpField] : null) : null,
+      });
+    }
+
+    if (latestStageRawExpected && planDate && latestStageRawExpected.getMonth() !== planDate.getMonth()) {
+      // Mismatch: Plan Delivery Month disagrees with the furthest stage that
+      // actually has an Expected Completion Date column (raw value, not the
+      // Expected-or-Actual fallback). Flag it, and prefer Plan Delivery
+      // Month's resolved date for grouping - it's the more deliberately-set
+      // of the two.
+      planMonthMismatches.push({
+        'Report Name': name,
+        'Domain': domain,
+        'PO': po,
+        'Plan Delivery Month': (row['Plan Delivery Month'] || '').toString().trim(),
+        'Latest Stage Reached': latestStageWithExpected,
+        'Latest Stage Expected Date': latestStageRawExpected,
+      });
+      reportRepresentativeDate[name] = planDate;
+    } else if (lastKnownDate) {
       reportRepresentativeDate[name] = lastKnownDate;
     } else if (planDate) {
       reportRepresentativeDate[name] = planDate;
@@ -908,7 +1219,7 @@ function deriveFactAndDimFromCombinedData(workbook) {
     'Expected Release Date': new Date(e.year, e.month + 1, 0), // last day of month
   }));
 
-  return { factRows: derivedFact, dimRows: derivedDim };
+  return { factRows: derivedFact, dimRows: derivedDim, planMonthMismatches, reportPlanMonthKey: reportPlanMonthKeyLocal, missingConfirmedDeployedDate, statusActualMismatches, currentStatusStageMismatches };
 }
 
 async function loadWorkbookFromBuffer(buf, sourceLabel) {
@@ -929,6 +1240,11 @@ async function loadWorkbookFromBuffer(buf, sourceLabel) {
   const derived = hasCombinedData ? deriveFactAndDimFromCombinedData(workbook) : null;
 
   factRows = hasCombinedData ? derived.factRows : excelSheetToRows(workbook, 'Fact Table', true);
+  planMonthMismatches = derived ? derived.planMonthMismatches : [];
+  reportPlanMonthKey = derived ? derived.reportPlanMonthKey : {}; // {} for legacy Fact-Table-only uploads - falls back to Expected Release Date, see rowMonthKey()
+  missingConfirmedDeployedDate = derived ? derived.missingConfirmedDeployedDate : [];
+  statusActualMismatches = derived ? derived.statusActualMismatches : [];
+  currentStatusStageMismatches = derived ? derived.currentStatusStageMismatches : [];
 
   const manualDimRows = excelSheetToRows(workbook, 'Dim Table', true);
   dimRows = manualDimRows.length ? manualDimRows : (derived ? derived.dimRows : []);
@@ -940,6 +1256,10 @@ async function loadWorkbookFromBuffer(buf, sourceLabel) {
   buildTimeline();
   renderUpcomingForPO();
   renderStageGaps();
+  renderPlanMonthMismatches();
+  renderMissingConfirmedDeployedDate();
+  renderStatusActualMismatches();
+  renderCurrentStatusStageMismatches();
   renderRawTables();
   statusEl.textContent = `Loaded ${factRows.length} report rows, ${dimRows.length} timeline rows from ${sourceLabel}.`;
   statusEl.classList.remove('error');
@@ -948,6 +1268,10 @@ async function loadWorkbookFromBuffer(buf, sourceLabel) {
   document.getElementById('thresholdRow2').style.display = 'flex';
   document.getElementById('upcomingContainer').style.display = 'block';
   document.getElementById('gapsContainer').style.display = 'block';
+  document.getElementById('planMonthMismatchContainer').style.display = 'block';
+  document.getElementById('missingConfirmedDeployedContainer').style.display = 'block';
+  document.getElementById('statusActualMismatchContainer').style.display = 'block';
+  document.getElementById('currentStatusStageMismatchContainer').style.display = 'block';
 }
 
 document.getElementById('timelineFileInput').addEventListener('change', async (e) => {
@@ -965,17 +1289,18 @@ document.getElementById('timelineFileInput').addEventListener('change', async (e
   }
 });
 
-// Auto-load a default workbook (data/GDM_Tracker_V18_updated.xlsx, alongside
+// Auto-load a default workbook (data/GDM_Tracker_latest.xlsx, alongside
 // this page) on startup if one is present, so the dashboard shows data
 // immediately without requiring a manual upload. Uploading a file at any
-// time still overrides it.
+// time still overrides it. Replace this file whenever the team has a newer
+// tracker export - the filename stays the same so no code change is needed.
 async function tryAutoLoadDefaultWorkbook() {
   const statusEl = document.getElementById('timelineFileStatus');
   try {
-    const res = await fetch('data/GDM_Tracker_V18_updated.xlsx', { cache: 'no-store' });
+    const res = await fetch('data/GDM_Tracker_latest.xlsx', { cache: 'no-store' });
     if (!res.ok) return;
     const buf = await res.arrayBuffer();
-    await loadWorkbookFromBuffer(buf, 'GDM_Tracker_V18_updated.xlsx (auto-loaded)');
+    await loadWorkbookFromBuffer(buf, 'GDM_Tracker_latest.xlsx (auto-loaded)');
   } catch (err) {
     // No default file available (or not served) — that's fine, manual upload still works.
   }
@@ -1123,17 +1448,25 @@ function stageRank(status) {
 function showDrilldown(domain, monthKey) {
   const matches = factRows.filter((row) => {
     if (row['Domain'] !== domain) return false;
-    const key = monthKeyFromDate(row['Expected Release Date']);
-    return key === monthKey;
+    return rowMonthKey(row) === monthKey;
   });
 
-  // The drill-down table should show one row per report - the latest one,
-  // i.e. whichever stage-row is furthest along its pipeline - rather than
-  // every stage-row a report happens to have in this domain + month.
+  // The drill-down table should show one row per report - its TRUE overall
+  // furthest stage, not just the furthest stage among rows that happen to
+  // land in THIS domain + month. A report's different stages can land in
+  // different months (e.g. PBI Dev done in May, QA/DPO Approval/RELEASED IN
+  // PROD all in June) - `matches` above only decides WHICH reports belong in
+  // this month's view; the row shown for each one is looked up across ALL of
+  // that report's factRows (still scoped to this domain), so a report that's
+  // since shipped shows "RELEASED IN PROD" even when viewed from an earlier
+  // month it also had activity in, rather than showing whatever earlier
+  // stage happened to fall in that specific month.
+  const namesInMonth = new Set(matches.map((row) => row['Report Name']).filter(Boolean));
   const latestByReport = new Map();
-  matches.forEach((row) => {
+  factRows.forEach((row) => {
     const name = row['Report Name'];
-    if (!name) return;
+    if (!name || !namesInMonth.has(name)) return;
+    if (row['Domain'] !== domain) return;
     const existing = latestByReport.get(name);
     if (!existing || stageRank(row['Status']) >= stageRank(existing['Status'])) {
       latestByReport.set(name, row);
@@ -1231,12 +1564,60 @@ function renderUpcomingForPO() {
   const cutoff = new Date(today);
   cutoff.setDate(cutoff.getDate() + upcomingDays);
 
-  const upcomingAll = factRows.filter((row) => {
+  // A report can have several stage-rows in factRows at once (one per stage
+  // it has reached), so a report that's already shipped still has its own
+  // old DB Dev/PBI Dev rows sitting around from earlier in its history.
+  // Those must NOT show up here just because their (long-past) Expected
+  // Release Date happens to fall inside the window - a report only belongs
+  // in "coming your way" if it hasn't shipped yet.
+  const shippedReportNames = new Set(
+    factRows.filter((row) => row['Status'] === 'RELEASED IN PROD').map((row) => row['Report Name'])
+  );
+
+  // This table exists to tell QA testers when a report is landing in QA, so
+  // its Status Start / Expected Release / Days Until Release columns should
+  // reflect the QA stage's own dates - not just whichever DB Dev/PBI Dev
+  // stage-row happens to be kept for display. If Current Status has already
+  // advanced this report to QA or beyond, it has its own QA stage-row in
+  // factRows; look those up per report (scoped to domain, in case the same
+  // report name exists in more than one domain) so they can be substituted
+  // in below. Falls back to the DB Dev/PBI Dev row's own dates when no QA
+  // row exists yet (the report genuinely hasn't reached QA).
+  const qaRowByReport = new Map();
+  factRows.forEach((r) => {
+    if (r['Status'] === 'QA') qaRowByReport.set(`${r['Domain']}||${r['Report Name']}`, r);
+  });
+
+  const upcomingRaw = factRows.filter((row) => {
     const status = (row['Status'] || '').trim().toLowerCase();
     if (status !== 'db dev' && status !== 'pbi dev') return false;
+    if (shippedReportNames.has(row['Report Name'])) return false; // already shipped - exclude entirely
     const expected = row['Expected Release Date'];
     if (!(expected instanceof Date) || isNaN(expected)) return false;
     return expected <= cutoff; // includes anything already overdue too
+  });
+
+  // A report currently in PBI Dev still has its earlier (already-completed)
+  // DB Dev stage-row sitting in factRows too, since Current Status = PBI Dev
+  // means BOTH stages have been emitted. If both rows' Expected Release
+  // Dates happen to fall inside the window, the report would otherwise show
+  // up twice. Keep only the single furthest-along stage-row per report name.
+  const latestByReportName = new Map();
+  upcomingRaw.forEach((row) => {
+    const name = row['Report Name'];
+    const existing = latestByReportName.get(name);
+    if (!existing || stageRank(row['Status']) >= stageRank(existing['Status'])) {
+      latestByReportName.set(name, row);
+    }
+  });
+  const upcomingAll = Array.from(latestByReportName.values()).map((row) => {
+    const qaRow = qaRowByReport.get(`${row['Domain']}||${row['Report Name']}`);
+    return {
+      ...row,
+      '_displayStatusStart': qaRow ? qaRow['Status Start Date'] : row['Status Start Date'],
+      '_displayExpectedRelease': qaRow ? qaRow['Expected Release Date'] : row['Expected Release Date'],
+      '_displayActualRelease': qaRow ? qaRow['Actual Release Date'] : row['Actual Release Date'],
+    };
   });
 
   populateUpcomingPoFilter(upcomingAll);
@@ -1248,10 +1629,21 @@ function renderUpcomingForPO() {
     upcoming = upcoming.filter((row) => (row['PO'] || '').toString().trim() === poFilterValue);
   }
   if (monthFilterValue) {
-    upcoming = upcoming.filter((row) => monthKeyFromDate(row['Expected Release Date']) === monthFilterValue);
+    // Group by the same rule the heatmap/drill-down use (Plan Delivery
+    // Month takes priority over any individual stage's Expected Release
+    // Date - see rowMonthKey) so clicking a heatmap cell, or picking a month
+    // here directly, shows the same reports the drill-down would for that
+    // cell. Without this, a report could be bucketed under a different
+    // month here (based on its QA Expected Completion Date) than where the
+    // heatmap/drill-down place it (based on Plan Delivery Month).
+    upcoming = upcoming.filter((row) => rowMonthKey(row) === monthFilterValue);
   }
 
-  upcoming.sort((a, b) => a['Expected Release Date'] - b['Expected Release Date']);
+  const sortKey = (row) => {
+    const d = row['_displayExpectedRelease'];
+    return d instanceof Date && !isNaN(d) ? d.getTime() : Infinity;
+  };
+  upcoming.sort((a, b) => sortKey(a) - sortKey(b));
 
   const tbody = document.getElementById('upcomingTbody');
   tbody.innerHTML = '';
@@ -1259,14 +1651,19 @@ function renderUpcomingForPO() {
 
   upcoming.forEach((row) => {
     const tr = document.createElement('tr');
-    const risk = classifyRisk(row, today);
-    const expected = row['Expected Release Date'];
-    const actual = row['Actual Release Date'];
+    const expected = row['_displayExpectedRelease'];
+    const actual = row['_displayActualRelease'];
+    // Every row in this table is a report "coming your way" to QA - that's
+    // the whole premise of the table - so both the Stage badge and the
+    // Status risk badge are evaluated as that report's QA stage, using the
+    // QA dates already resolved above (or their DB Dev/PBI Dev fallback),
+    // not the underlying kept row's own DB Dev/PBI Dev stage name and dates.
+    const risk = classifyRisk({ 'Status': 'QA', 'Expected Release Date': expected, 'Actual Release Date': actual, 'Blocked': row['Blocked'], 'BlockedReturnTo': row['BlockedReturnTo'] }, today);
     const alreadyReleased = actual instanceof Date && !isNaN(actual);
     const daysUntil = expected instanceof Date && !isNaN(expected) ? daysBetween(today, expected) : '';
     let daysCell;
     if (alreadyReleased) {
-      daysCell = `Released ${fmt(actual)}`;
+      daysCell = `Completed ${fmt(actual)}`;
     } else if (daysUntil === '') {
       daysCell = '';
     } else if (daysUntil < 0) {
@@ -1278,7 +1675,8 @@ function renderUpcomingForPO() {
       <td>${row['PO'] || ''}</td>
       <td>${row['Report Name'] || ''}</td>
       <td>${row['Domain'] || ''}</td>
-      <td>${fmt(row['Status Start Date'])}</td>
+      <td><span class="badge">QA</span></td>
+      <td>${fmt(row['_displayStatusStart'])}</td>
       <td>${fmt(expected)}</td>
       <td>${daysCell}</td>
       <td>${riskBadgeHtml(risk)}</td>
@@ -1332,6 +1730,14 @@ function computeStageGaps() {
   const gaps = [];
   byReport.forEach((records, reportName) => {
     records.forEach((row) => {
+      // Blocked reports are excluded entirely - a completed stage with no
+      // next-stage record yet is expected while blocked (rework in
+      // progress, or stuck pending something else), not a data gap. This
+      // also covers the case where "Blocked - Needs Return To" caused a
+      // later stage-row (e.g. QA) to be intentionally dropped from the
+      // Fact Table - that's not a missing record either, it's the report
+      // correctly reverting to an earlier stage.
+      if (row['Blocked']) return;
       const status = (row['Status'] || '').trim().toLowerCase();
       const idx = STAGE_SEQUENCE.indexOf(status);
       if (idx === -1 || idx === STAGE_SEQUENCE.length - 1) return; // unrecognized or already final stage
@@ -1382,6 +1788,116 @@ function renderStageGaps() {
 
   document.getElementById('gapsTable').style.display = gaps.length ? 'table' : 'none';
   document.getElementById('gapsEmpty').style.display = gaps.length ? 'none' : 'block';
+}
+
+// ---------------------------------------------------------------------------
+// Plan Delivery Month mismatches - populated by deriveFactAndDimFromCombinedData
+// (see planMonthMismatches there for the actual comparison/fallback rule).
+// This just renders whatever it found.
+// ---------------------------------------------------------------------------
+
+function renderPlanMonthMismatches() {
+  const tbody = document.getElementById('planMonthMismatchTbody');
+  tbody.innerHTML = '';
+  const fmt = (d) => (d instanceof Date && !isNaN(d) ? d.toLocaleDateString() : '');
+
+  planMonthMismatches.forEach((m) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${m['Report Name']}</td>
+      <td>${m['Domain']}</td>
+      <td>${m['PO']}</td>
+      <td>${m['Plan Delivery Month']}</td>
+      <td><span class="badge">${(m['Latest Stage Reached'] || '').trim()}</span></td>
+      <td>${fmt(m['Latest Stage Expected Date'])}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('planMonthMismatchTable').style.display = planMonthMismatches.length ? 'table' : 'none';
+  document.getElementById('planMonthMismatchEmpty').style.display = planMonthMismatches.length ? 'none' : 'block';
+}
+
+// ---------------------------------------------------------------------------
+// Missing Confirmed Deployed Date - populated by deriveFactAndDimFromCombinedData
+// (see missingConfirmedDeployedDate there for the actual check). This just
+// renders whatever it found.
+// ---------------------------------------------------------------------------
+
+function renderMissingConfirmedDeployedDate() {
+  const tbody = document.getElementById('missingConfirmedDeployedTbody');
+  tbody.innerHTML = '';
+
+  missingConfirmedDeployedDate.forEach((m) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${m['Report Name']}</td>
+      <td>${m['Domain']}</td>
+      <td>${m['PO']}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('missingConfirmedDeployedTable').style.display = missingConfirmedDeployedDate.length ? 'table' : 'none';
+  document.getElementById('missingConfirmedDeployedEmpty').style.display = missingConfirmedDeployedDate.length ? 'none' : 'block';
+}
+
+// ---------------------------------------------------------------------------
+// Current Status / Actual Completion Date mismatches - populated by
+// deriveFactAndDimFromCombinedData (see statusActualMismatches there for the
+// actual check). This just renders whatever it found.
+// ---------------------------------------------------------------------------
+
+function renderStatusActualMismatches() {
+  const tbody = document.getElementById('statusActualMismatchTbody');
+  tbody.innerHTML = '';
+  const fmt = (d) => (d instanceof Date && !isNaN(d) ? d.toLocaleDateString() : '');
+
+  statusActualMismatches.forEach((m) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${m['Report Name']}</td>
+      <td>${m['Domain']}</td>
+      <td>${m['PO']}</td>
+      <td><span class="badge">${m['Current Status']}</span></td>
+      <td><span class="badge">${m['Missing Actual For Stage']}</span></td>
+      <td>${fmt(m['Prior Stage Expected Completion Date'])}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('statusActualMismatchTable').style.display = statusActualMismatches.length ? 'table' : 'none';
+  document.getElementById('statusActualMismatchEmpty').style.display = statusActualMismatches.length ? 'none' : 'block';
+}
+
+// ---------------------------------------------------------------------------
+// Current Status lagging behind completion - populated by
+// deriveFactAndDimFromCombinedData (see currentStatusStageMismatches there
+// for the actual check: Current Status = "QA" but QA Actual Completion Date
+// is already filled in). This just renders whatever it found.
+// ---------------------------------------------------------------------------
+
+function renderCurrentStatusStageMismatches() {
+  const tbody = document.getElementById('currentStatusStageMismatchTbody');
+  tbody.innerHTML = '';
+  const fmt = (d) => (d instanceof Date && !isNaN(d) ? d.toLocaleDateString() : '');
+
+  currentStatusStageMismatches.forEach((m) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${m['Report Name']}</td>
+      <td>${m['Domain']}</td>
+      <td>${m['PO']}</td>
+      <td><span class="badge">${m['Current Status']}</span></td>
+      <td><span class="badge">${m['Completed Stage']}</span></td>
+      <td>${fmt(m['Completed On'])}</td>
+      <td><span class="badge">${m['Implied Stage']}</span></td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('currentStatusStageMismatchTable').style.display = currentStatusStageMismatches.length ? 'table' : 'none';
+  document.getElementById('currentStatusStageMismatchEmpty').style.display = currentStatusStageMismatches.length ? 'none' : 'block';
 }
 
 // ---------------------------------------------------------------------------
