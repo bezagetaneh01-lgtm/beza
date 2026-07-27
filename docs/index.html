@@ -1048,7 +1048,11 @@ function deriveFactAndDimFromCombinedData(workbook) {
     const dbDev = row['DB Developer'];
     const pbiDev = row['PBI Developer'];
     const schema = row['Schema'];
-    const isBlocked = (row['Blocked?'] || '').toString().trim().toLowerCase() === 'yes';
+    // Blocked? is now a single dropdown: "No", "Yes - other", or
+    // "Yes - needs <Stage> to fix" (Blocked - Needs Return To and Blocked At
+    // were folded into this one column and removed from the tracker).
+    const blockedRaw = (row['Blocked?'] || '').toString().trim();
+    const isBlocked = blockedRaw.toLowerCase().startsWith('yes');
     const planDate = planDeliveryMonthToDate(row['Plan Delivery Month'], today);
 
     if ((row['Current Status'] || '').toString().trim() === 'RELEASED IN PROD' && !isValidDate(row['Confirmed Deployed Date'])) {
@@ -1068,14 +1072,18 @@ function deriveFactAndDimFromCombinedData(workbook) {
     const currentStatus = (row['Current Status'] || '').toString().trim();
     const confirmedDeployedDate = row['Confirmed Deployed Date'];
     const qaActualCompletionDate = row['QA Actual Completion Date'];
-    const neededReturnTo = (row['Blocked - Needs Return To'] || '').toString().trim();
-    // When a report is Blocked with a specific "Blocked - Needs Return To"
-    // stage set, THAT stage is the report's real current stage for row-count
-    // purposes - Current Status itself may not have been rolled back yet to
-    // reflect it (Combined Delivery Data's "Blocked At" formula shows
-    // "Blocked - needs <that stage> to fix" in this case, rather than
-    // "Blocked at <Current Status>"). Falls back to the literal Current
-    // Status otherwise (not blocked, or blocked with no return-to target).
+    // Extract the return-to stage, if any, straight out of the Blocked?
+    // text itself (e.g. "Yes - needs QA to fix" -> "QA"). "Yes - other" and
+    // "No" both yield no return-to stage.
+    let neededReturnTo = '';
+    for (const stage of GDM_STAGE_SEQUENCE) {
+      if (blockedRaw.indexOf(`needs ${stage} to fix`) !== -1) { neededReturnTo = stage; break; }
+    }
+    // When a report is Blocked with a specific "needs <Stage> to fix" target,
+    // THAT stage is the report's real current stage for row-count purposes -
+    // Current Status itself may not have been rolled back yet to reflect it.
+    // Falls back to the literal Current Status otherwise (not blocked, or
+    // blocked as "Yes - other" with no specific stage to return to).
     const effectiveStatus = (isBlocked && neededReturnTo) ? neededReturnTo : currentStatus;
     let stageCount = GDM_CURRENT_STATUS_STAGE_COUNT[effectiveStatus] ?? 0;
     if (effectiveStatus === 'QA' && isValidDate(qaActualCompletionDate) && !isBlocked) {
