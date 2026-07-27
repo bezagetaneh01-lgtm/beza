@@ -805,7 +805,8 @@ function classifyRisk(row, today) {
   // doesn't matter - the report needs attention either way and shouldn't
   // read as "Completed"/"Released"/"Rework" instead of "Blocked".
   if (row['Blocked']) {
-    return { level: 'blocked', label: 'Blocked' };
+    const returnTo = (row['BlockedReturnTo'] || '').toString().trim();
+    return { level: 'blocked', label: returnTo ? `Blocked - needs ${returnTo} to fix` : 'Blocked - other' };
   }
   if (actual instanceof Date && !isNaN(actual)) {
     // A report is only truly "released in prod" once Confirmed Deployed Date
