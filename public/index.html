@@ -402,6 +402,7 @@
             <th>Expected Completion</th>
             <th>Days Until Completion</th>
             <th>Status</th>
+            <th>Why sent back</th>
             <th>DB Developer</th>
             <th>PBI Developer</th>
             <th>Schema</th>
@@ -411,6 +412,29 @@
       </table>
     </div>
     <div id="upcomingEmpty" class="msg" style="display:none; padding-left:0;">No DB Dev/PBI Dev-status reports expected in this window.</div>
+  </div>
+
+  <div id="openReworksContainer" class="drilldown" style="display:none; margin-top:0;">
+    <h3>Open reworks (sent back, not yet resolved) <span id="openReworksCount" class="risk-badge blocked" style="margin-left:6px;"></span></h3>
+    <p class="upcoming-sub">Every bounce-back on the <b>Rework Log</b> that is not marked Resolved. <b>UNCLAIMED</b> = the fixer has not yet committed an Expected Fix Date. <b>LATE</b> = the fixer's promised date has passed.</p>
+    <div style="overflow-x:auto">
+      <table id="openReworksTable">
+        <thead>
+          <tr>
+            <th>Report Name</th>
+            <th>From &rarr; To</th>
+            <th>Sent Back</th>
+            <th>Sent Back By</th>
+            <th>What Was Wrong</th>
+            <th>Fixer</th>
+            <th>Promised</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="openReworksTbody"></tbody>
+      </table>
+    </div>
+    <div id="openReworksEmpty" class="msg" style="display:none; padding-left:0;">No open reworks &mdash; nothing is bounced back right now.</div>
   </div>
 
   <div id="rawTablesContainer" class="drilldown" style="display:none; margin-top:0;">
@@ -728,6 +752,7 @@ Object.keys(TAB_BUTTON_TO_PANEL).forEach((btnId) => {
 
 let factRows = [];      // parsed 'Fact Table' rows
 let dimRows = [];       // parsed 'Dim Table' rows
+let reworkRows = [];    // parsed 'Rework Log' entry rows (one per bounce-back)
 let monthKeys = [];     // e.g. ['2026-04', '2026-05', ...] sorted chronologically
 let monthLabels = {};   // '2026-04' -> 'Apr-26'
 let domainCounts = {};  // domain -> { month key -> expected count, from Dim Table }
@@ -1231,6 +1256,99 @@ function deriveFactAndDimFromCombinedData(workbook) {
   return { factRows: derivedFact, dimRows: derivedDim, planMonthMismatches, reportPlanMonthKey: reportPlanMonthKeyLocal, missingConfirmedDeployedDate, statusActualMismatches, currentStatusStageMismatches };
 }
 
+// ---------------------------------------------------------------------------
+// Open Reworks - unresolved Rework Log rows (sent back, not yet fixed)
+// ---------------------------------------------------------------------------
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function isClosedResolution(v) {
+  const res = String(v || '').trim().toLowerCase();
+  return res === 'yes' || res === 'did not pass re-test';
+}
+
+// newest OPEN attempt for a report (rejected + accepted attempts are history)
+function newestOpenAttempt(reportName) {
+  let best = null;
+  reworkRows.forEach(r => {
+    if (r['Report Name'] !== reportName || isClosedResolution(r['Resolved?'])) return;
+    const d = r['Date Sent Back'] instanceof Date ? r['Date Sent Back'].getTime() : 0;
+    const bd = best && best['Date Sent Back'] instanceof Date ? best['Date Sent Back'].getTime() : -1;
+    if (!best || d >= bd) best = r;
+  });
+  return best;
+}
+
+function attemptCountFor(reportName) {
+  return reworkRows.filter(r => r['Report Name'] === reportName).length;
+}
+
+function computeReworkStatus(row, today) {
+  const sent = row['Date Sent Back'] instanceof Date ? row['Date Sent Back'] : null;
+  const promised = row['Expected Fix Date'] instanceof Date ? row['Expected Fix Date'] : null;
+  const fixed = row['Date Fixed'] instanceof Date ? row['Date Fixed'] : null;
+  const day = 24 * 60 * 60 * 1000;
+  if (!sent) return { cls: 'overdue', label: 'Missing sent-back date' };
+  if (fixed) {
+    const took = Math.floor((fixed - sent) / day);
+    return { cls: 'released', label: `Fixed in ${took} d - awaiting re-test` };
+  }
+  const daysOpen = Math.floor((today - sent) / day);
+  if (!promised) return { cls: 'overdue', label: `UNCLAIMED ${daysOpen} d` };
+  if (today > promised) {
+    const late = Math.floor((today - promised) / day);
+    return { cls: 'overdue', label: `${late} d LATE` };
+  }
+  return { cls: 'rework', label: `Open ${daysOpen} d` };
+}
+
+function renderOpenReworks() {
+  const tbody = document.getElementById('openReworksTbody');
+  const empty = document.getElementById('openReworksEmpty');
+  const count = document.getElementById('openReworksCount');
+  tbody.innerHTML = '';
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const open = reworkRows.filter(r => {
+    if (!r['Report Name']) return false;
+    const res = String(r['Resolved?'] || '').trim().toLowerCase();
+    return res !== 'yes' && res !== 'did not pass re-test';
+  });
+  count.textContent = String(open.length);
+  count.style.display = open.length ? '' : 'none';
+  empty.style.display = open.length ? 'none' : 'block';
+  document.getElementById('openReworksTable').style.display = open.length ? '' : 'none';
+  const fmt = d => (d instanceof Date) ? `${d.getMonth() + 1}/${d.getDate()}` : '';
+  open
+    .sort((a, b) => (a['Date Sent Back'] || 0) - (b['Date Sent Back'] || 0))
+    .forEach(r => {
+      const st = computeReworkStatus(r, today);
+      const tr = document.createElement('tr');
+      const cells = [
+        r['Report Name'],
+        `${r['From Stage'] || ''} \u2192 ${r['To Stage'] || ''}`,
+        fmt(r['Date Sent Back']),
+        r['Sent Back By'] || '',
+        r['What Was Wrong'] || '',
+        r['Fixed By'] || '',
+        fmt(r['Expected Fix Date']),
+      ];
+      cells.forEach(v => {
+        const td = document.createElement('td');
+        td.textContent = v == null ? '' : String(v);
+        tr.appendChild(td);
+      });
+      const tdSt = document.createElement('td');
+      const span = document.createElement('span');
+      span.className = 'risk-badge ' + st.cls;
+      span.textContent = st.label;
+      tdSt.appendChild(span);
+      tr.appendChild(tdSt);
+      tbody.appendChild(tr);
+    });
+}
+
 async function loadWorkbookFromBuffer(buf, sourceLabel) {
   const statusEl = document.getElementById('timelineFileStatus');
   const workbook = XLSX.read(buf, { type: 'array', cellDates: true });
@@ -1258,12 +1376,17 @@ async function loadWorkbookFromBuffer(buf, sourceLabel) {
   const manualDimRows = excelSheetToRows(workbook, 'Dim Table', true);
   dimRows = manualDimRows.length ? manualDimRows : (derived ? derived.dimRows : []);
 
+  // Rework Log: banner row 1, headers row 2 - same shape as Combined Delivery Data
+  reworkRows = excelSheetToRows(workbook, 'Rework Log', true)
+    .filter(r => r['Report Name']);
+
   if (!dimRows.length) {
     throw new Error('No "Dim Table" sheet, and no "Combined Delivery Data" sheet with usable dates, found in this file.');
   }
 
   buildTimeline();
   renderUpcomingForPO();
+  renderOpenReworks();
   renderStageGaps();
   renderPlanMonthMismatches();
   renderMissingConfirmedDeployedDate();
@@ -1276,6 +1399,7 @@ async function loadWorkbookFromBuffer(buf, sourceLabel) {
   document.getElementById('thresholdRow').style.display = 'flex';
   document.getElementById('thresholdRow2').style.display = 'flex';
   document.getElementById('upcomingContainer').style.display = 'block';
+  document.getElementById('openReworksContainer').style.display = 'block';
   document.getElementById('gapsContainer').style.display = 'block';
   document.getElementById('planMonthMismatchContainer').style.display = 'block';
   document.getElementById('missingConfirmedDeployedContainer').style.display = 'block';
@@ -1667,7 +1791,8 @@ function renderUpcomingForPO() {
     // Status risk badge are evaluated as that report's QA stage, using the
     // QA dates already resolved above (or their DB Dev/PBI Dev fallback),
     // not the underlying kept row's own DB Dev/PBI Dev stage name and dates.
-    const risk = classifyRisk({ 'Status': 'QA', 'Expected Release Date': expected, 'Actual Release Date': actual, 'Blocked': row['Blocked'], 'BlockedReturnTo': row['BlockedReturnTo'] }, today);
+    const risk0 = classifyRisk({ 'Status': 'QA', 'Expected Release Date': expected, 'Actual Release Date': actual, 'Blocked': row['Blocked'], 'BlockedReturnTo': row['BlockedReturnTo'] }, today);
+    let risk = risk0;
     const alreadyReleased = actual instanceof Date && !isNaN(actual);
     const daysUntil = expected instanceof Date && !isNaN(expected) ? daysBetween(today, expected) : '';
     let daysCell;
@@ -1680,15 +1805,46 @@ function renderUpcomingForPO() {
     } else {
       daysCell = `${daysUntil}d`;
     }
+    // Blocked rows: the main tab's stage dates are stale by definition - the
+    // Rework Log's newest open attempt is the live truth. Expected Completion
+    // shows the fixer's promise (or UNCLAIMED), Days Until counts against the
+    // promise, and the reason/who-holds-the-baton comes from the attempt row.
+    let expectedCell = fmt(expected);
+    let whyCell = '';
+    const att = risk0.level === 'blocked' ? newestOpenAttempt(row['Report Name']) : null;
+    if (att) {
+      const promise = att['Expected Fix Date'] instanceof Date ? att['Expected Fix Date'] : null;
+      const fixedD = att['Date Fixed'] instanceof Date ? att['Date Fixed'] : null;
+      const attempts = attemptCountFor(row['Report Name']);
+      const reason = String((fixedD ? (att['What Was Fixed'] || att['What Was Wrong']) : att['What Was Wrong']) || '');
+      const trunc = reason.length > 70 ? reason.slice(0, 67) + '…' : reason;
+      const chip = attempts > 1 ? `<span class="risk-badge rework" style="margin-right:6px;">Attempt ${attempts}</span>` : '';
+      whyCell = `${chip}<span title="${escapeHtml(reason)}">${escapeHtml(trunc)}</span>`;
+      if (fixedD) {
+        expectedCell = `${fmt(fixedD)} <span style="opacity:.7">(fixed)</span>`;
+        const ago = daysBetween(fixedD, today);
+        daysCell = `Fixed ${ago}d ago — re-test: ${escapeHtml(att['Sent Back By'] || 'sender')}`;
+        risk = { level: 'released', label: 'Fixed - awaiting re-test' };
+      } else if (promise) {
+        expectedCell = `${fmt(promise)} <span style="opacity:.7">(fix promise)</span>`;
+        const d = daysBetween(today, promise);
+        daysCell = d < 0 ? `${Math.abs(d)}d overdue (promise)` : `${d}d (promise)`;
+      } else {
+        expectedCell = `<span class="risk-badge overdue">UNCLAIMED</span>`;
+        const team = att['To Stage'] || row['BlockedReturnTo'] || '';
+        daysCell = `Waiting on ${escapeHtml(team ? team + ' team' : 'a fixer')} (unclaimed)`;
+      }
+    }
     tr.innerHTML = `
       <td>${row['PO'] || ''}</td>
       <td>${row['Report Name'] || ''}</td>
       <td>${row['Domain'] || ''}</td>
       <td><span class="badge">QA</span></td>
       <td>${fmt(row['_displayStatusStart'])}</td>
-      <td>${fmt(expected)}</td>
+      <td>${expectedCell}</td>
       <td>${daysCell}</td>
       <td>${riskBadgeHtml(risk)}</td>
+      <td>${whyCell}</td>
       <td>${row['DB Developers '] ?? row['DB Developers'] ?? ''}</td>
       <td>${row['PBI Developers'] || ''}</td>
       <td>${row['Schema'] || ''}</td>
