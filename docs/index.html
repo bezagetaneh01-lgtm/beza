@@ -416,7 +416,7 @@
 
   <div id="openReworksContainer" class="drilldown" style="display:none; margin-top:0;">
     <h3>Open reworks (sent back, not yet resolved) <span id="openReworksCount" class="risk-badge blocked" style="margin-left:6px;"></span></h3>
-    <p class="upcoming-sub">Every bounce-back on the <b>Rework Log</b> that is not marked Resolved. <b>UNCLAIMED</b> = the fixer has not yet committed an Expected Fix Date. <b>LATE</b> = the fixer's promised date has passed.</p>
+    <p class="upcoming-sub">Every bounce-back on the <b>Rework Log</b> that is not marked Resolved, plus any report flagged Blocked with no log row at all. <b>UNCLAIMED</b> = the fixer has not yet committed an Expected Fix Date. <b>LATE</b> = the fixer's promised date has passed.</p>
     <div style="overflow-x:auto">
       <table id="openReworksTable">
         <thead>
@@ -910,6 +910,15 @@ function computeCellRisk(domain, monthKey, today, overdueAmberDays, overdueRedDa
   let worst = null;
   collapsedReportRows(domain, monthKey).forEach((row) => {
     if (String(row['Status'] || '').trim() === 'RELEASED IN PROD') return;
+    // Blocked reports: stage dates are stale by definition, so judge them by
+    // rework truth instead. Truly late (not logged / unclaimed / promise
+    // passed) -> red. Blocked-but-moving (kept promise, awaiting re-test)
+    // -> no color from this report; the drill-down badge tells the story.
+    if (row['Blocked']) {
+      const cr = classifyRisk(row, today);
+      if (cr.badgeClass === 'overdue') worst = 'overdue';
+      return;
+    }
     const actual = row['Actual Release Date'];
     if (actual instanceof Date && !isNaN(actual)) return;
     const expected = row['Expected Release Date'];
@@ -1400,6 +1409,46 @@ function renderOpenReworks() {
       tr.appendChild(tdSt);
       tbody.appendChild(tr);
     });
+
+  // Truly late but invisible to the log: reports flagged Blocked on the main
+  // tab with NO open Rework Log row at all. They belong in this panel too -
+  // a block nobody logged is the most overdue kind of open rework.
+  const seenBlocked = new Set();
+  const notLogged = [];
+  factRows.forEach((row) => {
+    const name = row['Report Name'];
+    if (!name || !row['Blocked'] || seenBlocked.has(name)) return;
+    seenBlocked.add(name);
+    if (!newestOpenAttempt(name)) notLogged.push(row);
+  });
+  notLogged.forEach((row) => {
+    const tr = document.createElement('tr');
+    const vals = [row['Report Name'],
+      `\u2192 ${(row['BlockedReturnTo'] || '?').toString().trim() || '?'}`,
+      '\u2014', '\u2014'];
+    vals.forEach(v => {
+      const td = document.createElement('td');
+      td.textContent = v;
+      tr.appendChild(td);
+    });
+    const tdWhy = document.createElement('td');
+    tdWhy.innerHTML = '<span class="risk-badge overdue">Not logged on Rework Log</span>';
+    tr.appendChild(tdWhy);
+    ['\u2014', '\u2014'].forEach(v => {
+      const td = document.createElement('td');
+      td.textContent = v;
+      tr.appendChild(td);
+    });
+    const tdSt = document.createElement('td');
+    tdSt.innerHTML = '<span class="risk-badge overdue">Blocked - not logged</span>';
+    tr.appendChild(tdSt);
+    tbody.appendChild(tr);
+  });
+  const totalShown = open.length + notLogged.length;
+  count.textContent = String(totalShown);
+  count.style.display = totalShown ? '' : 'none';
+  empty.style.display = totalShown ? 'none' : 'block';
+  document.getElementById('openReworksTable').style.display = totalShown ? '' : 'none';
 }
 
 async function loadWorkbookFromBuffer(buf, sourceLabel) {
