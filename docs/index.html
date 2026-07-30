@@ -355,7 +355,7 @@
             <th>QA Tester</th>
             <th>Stage</th>
             <th>Status Start</th>
-            <th>Expected Completion</th>
+            <th>Baseline Completion</th>
             <th>Actual Completion</th>
             <th>Status</th>
             <th>DB Developer</th>
@@ -377,7 +377,7 @@
 
   <div id="upcomingContainer" class="drilldown" style="display:none; margin-top:0;">
     <h3>Reports coming your way (DB Dev/PBI Dev, releasing soon)</h3>
-    <p class="upcoming-sub">Reports currently in <b>DB Dev</b> or <b>PBI Dev</b> status with an Expected Release Date inside the window above — so QA testers aren't surprised by a report landing for testing.</p>
+    <p class="upcoming-sub">Reports currently in <b>DB Dev</b> or <b>PBI Dev</b> status with a Baseline completion date inside the window above — so QA testers aren't surprised by a report landing for testing.</p>
     <div class="upload-row" style="padding:0 0 12px;">
       <label class="threshold-label">Filter by QA Tester:
         <select id="upcomingPoFilter" class="threshold-input" style="width:auto; padding:5px 8px;">
@@ -399,7 +399,7 @@
             <th>Domain</th>
             <th>Stage</th>
             <th>Status Start</th>
-            <th>Expected Completion</th>
+            <th>Baseline Completion</th>
             <th>Days Until Completion</th>
             <th>Status</th>
             <th>Why sent back</th>
@@ -545,7 +545,7 @@
             <th>QA Tester</th>
             <th>Current Status</th>
             <th>Missing Actual For Stage</th>
-            <th>That Stage's Expected Completion Date</th>
+            <th>That Stage's Baseline Completion Date</th>
           </tr>
         </thead>
         <tbody id="statusActualMismatchTbody"></tbody>
@@ -864,28 +864,44 @@ function riskBadgeHtml(risk) {
 //   - overdue >= overdueAmberDays -> 'near'     (amber)
 //   - overdue but < overdueAmberDays -> no flag from this report
 //   - not yet due -> no flag (see classifyRisk() for that case)
+// One report = one row (its furthest stage), scoped to a domain+month cell.
+// BOTH the timeline cell coloring and the drill-down table use this, so the
+// color a cell shows always agrees with the rows its drill-down lists.
+function collapsedReportRows(domain, monthKey) {
+  const cellMatches = factRows.filter((row) => {
+    if (row['Domain'] !== domain) return false;
+    return rowMonthKey(row) === monthKey;
+  });
+  const cellNames = new Set(cellMatches.map((row) => row['Report Name']).filter(Boolean));
+  const latestByReport = new Map();
+  factRows.forEach((row) => {
+    const name = row['Report Name'];
+    if (!name || !cellNames.has(name)) return;
+    if (row['Domain'] !== domain) return;
+    const existing = latestByReport.get(name);
+    if (!existing || stageRank(row['Status']) >= stageRank(existing['Status'])) {
+      latestByReport.set(name, row);
+    }
+  });
+  return Array.from(latestByReport.values());
+}
+
 function computeCellRisk(domain, monthKey, today, overdueAmberDays, overdueRedDays) {
   let worst = null;
-  factRows.forEach((row) => {
-    if (row['Domain'] !== domain) return;
-    if (rowMonthKey(row) !== monthKey) return;
-
+  collapsedReportRows(domain, monthKey).forEach((row) => {
+    if (String(row['Status'] || '').trim() === 'RELEASED IN PROD') return;
     const actual = row['Actual Release Date'];
-    if (actual instanceof Date && !isNaN(actual)) return; // already released, no flag
-
+    if (actual instanceof Date && !isNaN(actual)) return;
     const expected = row['Expected Release Date'];
     if (!(expected instanceof Date) || isNaN(expected)) return;
-
-    const daysUntil = daysBetween(today, expected); // negative = overdue
-    if (daysUntil >= 0) return; // not yet due — handled only in the drill-down table, not here
-
+    const daysUntil = daysBetween(today, expected);
+    if (daysUntil >= 0) return;
     const overdueBy = Math.abs(daysUntil);
     if (overdueBy >= overdueRedDays) {
       worst = 'overdue';
     } else if (overdueBy >= overdueAmberDays && worst !== 'overdue') {
       worst = 'near';
     }
-    // overdue by less than overdueAmberDays: not flagged
   });
   return worst;
 }
@@ -1026,6 +1042,23 @@ function planDeliveryMonthToDate(monthText, today) {
 
 function deriveFactAndDimFromCombinedData(workbook) {
   const rows = excelSheetToRows(workbook, 'Combined Delivery Data');
+  // Header rename resilience: the tracker renamed stage date columns to
+  // Baseline/Reforecast. Alias them back to the legacy keys the app reads.
+  const headerAliases = [
+    ['DB Dev Baseline Completion Date', 'DB Dev Expected Completion Date'],
+    ['PBI Dev Baseline Completion Date', 'PBI Dev Expected Completion Date'],
+    ['QA Baseline Completion Date', 'QA Expected Completion Date'],
+    ['DPO Approval Baseline Completion Date', 'DPO Approval Expected Completion Date'],
+    ['DB Dev Reforecast Completion Date', 'DB Dev Estimated Completion Date'],
+    ['PBI Dev Reforecast Completion Date', 'PBI Dev Estimated Completion Date'],
+    ['QA Reforecast Completion Date', 'QA Estimated Completion Date'],
+    ['DPO Approval Reforecast Completion Date', 'DPO Approval Estimated Completion Date'],
+  ];
+  rows.forEach(row => {
+    headerAliases.forEach(([newName, legacy]) => {
+      if (row[newName] !== undefined && row[legacy] === undefined) row[legacy] = row[newName];
+    });
+  });
   const derivedFact = [];
   const reportRepresentativeDate = {}; // Report Name -> Date, drives Dim Table grouping
   const reportDomain = {};
@@ -1594,18 +1627,7 @@ function showDrilldown(domain, monthKey) {
   // since shipped shows "RELEASED IN PROD" even when viewed from an earlier
   // month it also had activity in, rather than showing whatever earlier
   // stage happened to fall in that specific month.
-  const namesInMonth = new Set(matches.map((row) => row['Report Name']).filter(Boolean));
-  const latestByReport = new Map();
-  factRows.forEach((row) => {
-    const name = row['Report Name'];
-    if (!name || !namesInMonth.has(name)) return;
-    if (row['Domain'] !== domain) return;
-    const existing = latestByReport.get(name);
-    if (!existing || stageRank(row['Status']) >= stageRank(existing['Status'])) {
-      latestByReport.set(name, row);
-    }
-  });
-  const latestRows = Array.from(latestByReport.values());
+  const latestRows = collapsedReportRows(domain, monthKey);
 
   // foundCount is the number of DISTINCT reports among the matches, not the
   // number of stage-rows - a report can appear more than once here (one row
@@ -1642,7 +1664,7 @@ function showDrilldown(domain, monthKey) {
       <td><span class="badge">${(row['Status'] || '').trim() || '—'}</span></td>
       <td>${fmt(row['Status Start Date'])}</td>
       <td>${fmt(row['Expected Release Date'])}</td>
-      <td>${fmt(row['Actual Release Date'])}</td>
+      <td>${risk.level === 'blocked' ? '<span style="opacity:.7">\u2014 (to redo)</span>' : fmt(row['Actual Release Date'])}</td>
       <td>${riskBadgeHtml(risk)}</td>
       <td>${row['DB Developers '] ?? row['DB Developers'] ?? ''}</td>
       <td>${row['PBI Developers'] || ''}</td>
@@ -1805,13 +1827,17 @@ function renderUpcomingForPO() {
     } else {
       daysCell = `${daysUntil}d`;
     }
-    // Blocked rows: the main tab's stage dates are stale by definition - the
-    // Rework Log's newest open attempt is the live truth. Expected Completion
-    // shows the fixer's promise (or UNCLAIMED), Days Until counts against the
-    // promise, and the reason/who-holds-the-baton comes from the attempt row.
+    // Blocked rows never show a main-tab completion date - the Rework Log is
+    // the only source of truth for them. Logged: promise / UNCLAIMED / fixed.
+    // Not logged: dashes + a red chip, never a stale "Completed" date.
     let expectedCell = fmt(expected);
     let whyCell = '';
     const att = risk0.level === 'blocked' ? newestOpenAttempt(row['Report Name']) : null;
+    if (risk0.level === 'blocked' && !att) {
+      expectedCell = '\u2014';
+      daysCell = '\u2014';
+      whyCell = '<span class="risk-badge overdue">Not logged on Rework Log</span>';
+    }
     if (att) {
       const promise = att['Expected Fix Date'] instanceof Date ? att['Expected Fix Date'] : null;
       const fixedD = att['Date Fixed'] instanceof Date ? att['Date Fixed'] : null;
@@ -1839,7 +1865,7 @@ function renderUpcomingForPO() {
       <td>${row['PO'] || ''}</td>
       <td>${row['Report Name'] || ''}</td>
       <td>${row['Domain'] || ''}</td>
-      <td><span class="badge">QA</span></td>
+      <td><span class="badge">${(row['Status'] || 'QA').trim()}</span></td>
       <td>${fmt(row['_displayStatusStart'])}</td>
       <td>${expectedCell}</td>
       <td>${daysCell}</td>
