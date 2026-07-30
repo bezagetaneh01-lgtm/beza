@@ -830,8 +830,28 @@ function classifyRisk(row, today) {
   // doesn't matter - the report needs attention either way and shouldn't
   // read as "Completed"/"Released"/"Rework" instead of "Blocked".
   if (row['Blocked']) {
+    // The Rework Log is the source of truth for HOW a report is blocked.
+    // Red = truly late (no log row, no owner, or promise passed). Amber =
+    // blocked but moving (promise in the future, or fixed and waiting on
+    // the sender to re-test). Same labels in every table.
     const returnTo = (row['BlockedReturnTo'] || '').toString().trim();
-    return { level: 'blocked', label: returnTo ? `Blocked - needs ${returnTo} to fix` : 'Blocked - other' };
+    const att = (typeof newestOpenAttempt === 'function') ? newestOpenAttempt(row['Report Name']) : null;
+    if (!att) {
+      return { level: 'blocked', badgeClass: 'overdue', label: 'Blocked - not logged' };
+    }
+    const fixedD = att['Date Fixed'];
+    if (fixedD instanceof Date && !isNaN(fixedD)) {
+      return { level: 'blocked', label: 'Fixed - awaiting re-test' };
+    }
+    const promise = att['Expected Fix Date'];
+    if (!(promise instanceof Date) || isNaN(promise)) {
+      return { level: 'blocked', badgeClass: 'overdue', label: `Blocked - ${returnTo || 'fixer'} - UNCLAIMED` };
+    }
+    const pTxt = `${promise.getMonth() + 1}/${promise.getDate()}`;
+    if (daysBetween(today, promise) < 0) {
+      return { level: 'blocked', badgeClass: 'overdue', label: `Blocked - fix late (promised ${pTxt})` };
+    }
+    return { level: 'blocked', label: `Blocked - promised ${pTxt}` };
   }
   if (actual instanceof Date && !isNaN(actual)) {
     // A report is only truly "released in prod" once Confirmed Deployed Date
@@ -855,7 +875,7 @@ function classifyRisk(row, today) {
 }
 
 function riskBadgeHtml(risk) {
-  return `<span class="risk-badge ${risk.level}">${risk.label}</span>`;
+  return `<span class="risk-badge ${risk.badgeClass || risk.level}">${risk.label}</span>`;
 }
 
 // Worst risk level found among Fact Table rows for a given domain + month cell,
@@ -1850,7 +1870,7 @@ function renderUpcomingForPO() {
         expectedCell = `${fmt(fixedD)} <span style="opacity:.7">(fixed)</span>`;
         const ago = daysBetween(fixedD, today);
         daysCell = `Fixed ${ago}d ago — re-test: ${escapeHtml(att['Sent Back By'] || 'sender')}`;
-        risk = { level: 'released', label: 'Fixed - awaiting re-test' };
+        // classifyRisk already labels this 'Fixed - awaiting re-test'
       } else if (promise) {
         expectedCell = `${fmt(promise)} <span style="opacity:.7">(fix promise)</span>`;
         const d = daysBetween(today, promise);
