@@ -1,2258 +1,855 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>ODS &rarr; Snowflake Migration Dashboard</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GDM Migration — ODS → Snowflake</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
-  :root {
-    --bg: #0f172a;
-    --panel: #1e293b;
-    --panel-2: #273449;
-    --border: #334155;
-    --text: #e2e8f0;
-    --muted: #94a3b8;
-    --accent: #38bdf8;
-    --green: #22c55e;
-    --amber: #f59e0b;
-    --red: #ef4444;
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    background: var(--bg);
-    color: var(--text);
-  }
-  header {
-    padding: 20px 28px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 12px;
-  }
-  h1 { font-size: 18px; margin: 0; font-weight: 600; }
-  .sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
-  .toolbar {
-    display: flex;
-    gap: 10px;
-    padding: 16px 28px;
-    flex-wrap: wrap;
-    align-items: center;
-  }
-  input[type="text"] {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    color: var(--text);
-    padding: 8px 12px;
-    border-radius: 6px;
-    font-size: 13px;
-    min-width: 320px;
-    flex: 1;
-  }
-  button {
-    background: var(--accent);
-    color: #052;
-    border: none;
-    padding: 8px 16px;
-    border-radius: 6px;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    color: #0b1120;
-  }
-  button:hover { opacity: 0.9; }
-  button.secondary {
-    background: var(--panel-2);
-    color: var(--text);
-    border: 1px solid var(--border);
-  }
-  .summary {
-    display: flex;
-    gap: 12px;
-    padding: 0 28px 16px;
-    flex-wrap: wrap;
-  }
-  .chip {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 10px 16px;
-    font-size: 13px;
-  }
-  .chip b { display: block; font-size: 18px; margin-top: 2px; }
-  main { padding: 0 28px 40px; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th, td {
-    text-align: left;
-    padding: 10px 12px;
-    border-bottom: 1px solid var(--border);
-  }
-  th { color: var(--muted); font-weight: 600; position: sticky; top: 0; background: var(--bg); }
-  tr:hover { background: rgba(255,255,255,0.02); }
-  a.key { color: var(--accent); text-decoration: none; font-weight: 600; }
-  a.key:hover { text-decoration: underline; }
-  select.status-edit {
-    background: var(--panel-2);
-    color: var(--text);
-    border: 1px solid var(--border);
-    padding: 5px 8px;
-    border-radius: 5px;
-    font-size: 12px;
-  }
-  .badge {
-    display: inline-block;
-    padding: 3px 10px;
-    border-radius: 999px;
-    font-size: 11px;
-    font-weight: 600;
-    background: var(--panel-2);
-    border: 1px solid var(--border);
-  }
-  .msg { color: var(--muted); padding: 20px 28px; font-size: 13px; }
-  .error { color: var(--red); }
-  .save-status { font-size: 11px; margin-left: 6px; color: var(--muted); }
-  .connect-gate {
-    margin: 40px 28px;
-    padding: 24px;
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    max-width: 480px;
-  }
-  .connect-gate p { color: var(--muted); font-size: 13px; line-height: 1.5; }
-  .connect-btn {
-    display: inline-block;
-    background: var(--accent);
-    color: #0b1120;
-    border: none;
-    padding: 10px 18px;
-    border-radius: 6px;
-    font-size: 13px;
-    font-weight: 600;
-    text-decoration: none;
-    margin-top: 8px;
-  }
-  .site-badge { color: var(--muted); font-size: 12px; padding: 0 28px 8px; }
-
-  .tabs {
-    display: flex;
-    gap: 4px;
-    padding: 0 28px;
-    border-bottom: 1px solid var(--border);
-  }
-  .tab-btn {
-    background: transparent;
-    color: var(--muted);
-    border: none;
-    border-bottom: 2px solid transparent;
-    border-radius: 0;
-    padding: 12px 16px;
-    font-size: 13px;
-    font-weight: 600;
-  }
-  .tab-btn.active {
-    color: var(--text);
-    border-bottom-color: var(--accent);
-  }
-  .tab-btn:hover { opacity: 1; color: var(--text); }
-
-  .upload-row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 20px 28px;
-    flex-wrap: wrap;
-  }
-  input[type="file"] {
-    color: var(--text);
-    font-size: 13px;
-  }
-  .timeline-wrap { padding: 0 28px 40px; overflow-x: auto; }
-  table.timeline { border-collapse: collapse; font-size: 12px; min-width: 900px; }
-  table.timeline th, table.timeline td {
-    padding: 8px 10px;
-    text-align: center;
-    border: 1px solid var(--border);
-    white-space: nowrap;
-  }
-  table.timeline th.domain-col, table.timeline td.domain-col {
-    text-align: left;
-    position: sticky;
-    left: 0;
-    background: var(--bg);
-    min-width: 220px;
-  }
-  table.timeline thead th {
-    background: #2e75b6;
-    color: #fff;
-    font-weight: 600;
-  }
-  table.timeline td.count-cell {
-    background: #c0e6f5;
-    color: #0b1120;
-    font-weight: 600;
-    cursor: pointer;
-  }
-  table.timeline td.count-cell:hover { filter: brightness(1.15); }
-  table.timeline td.empty-cell { background: #22304a; color: transparent; }
-  table.timeline tr.total-row td { background: var(--panel-2); font-weight: 700; color: var(--text); }
-  table.timeline td.risk-overdue { background: #f28b82; color: #3a0a06; }
-  table.timeline td.risk-near { background: #fbc02d; color: #3a2c00; }
-  .missing-flag { color: #3a0a06; font-weight: 900; margin-left: 3px; }
-
-  .threshold-label {
-    font-size: 12px;
-    color: var(--muted);
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .threshold-input {
-    width: 56px;
-    background: var(--panel);
-    border: 1px solid var(--border);
-    color: var(--text);
-    padding: 5px 8px;
-    border-radius: 5px;
-    font-size: 12px;
-  }
-  .threshold-block {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    max-width: 360px;
-  }
-  .threshold-desc {
-    font-size: 11px;
-    color: var(--muted);
-    line-height: 1.4;
-  }
-  .legend { display: flex; gap: 14px; margin-left: auto; }
-  .legend-item { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
-  .legend-swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
-  .swatch-overdue { background: #f28b82; }
-  .swatch-near { background: #fbc02d; }
-  .swatch-ok { background: #c0e6f5; }
-
-  .risk-badge { padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; }
-  .risk-badge.overdue { background: #f28b82; color: #3a0a06; }
-  .risk-badge.ontrack { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); }
-  .risk-badge.released { background: var(--green); color: #06280f; }
-  .risk-badge.completed { background: #a8c7fa; color: #062040; }
-  .risk-badge.rework { background: #fdd663; color: #3a2c00; }
-  .risk-badge.blocked { background: #f6ad55; color: #3a1e00; }
-
-  .upcoming-sub { color: var(--muted); font-size: 12px; margin: -4px 0 14px; }
-
-  .drilldown {
-    margin: 0 28px 40px;
-    padding: 20px;
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-  }
-  .drilldown h3 { margin: 0 0 12px; font-size: 14px; }
-  .drilldown table { font-size: 12px; }
-  .close-drilldown {
-    float: right;
-    background: var(--panel-2);
-    border: 1px solid var(--border);
-    color: var(--text);
-    padding: 4px 10px;
-    font-size: 12px;
-  }
+:root{
+  --bg:#0d1420; --panel:#16202f; --panel2:#1c2839; --line:#2a3a52;
+  --text:#e8eef7; --muted:#93a4bd; --dim:#5c6d87;
+  --green:#4ade80; --blue:#60a5fa; --amber:#fbbf24; --red:#f87171; --purple:#c084fc;
+  --green-bg:#123524; --blue-bg:#14263f; --amber-bg:#3a2c0a; --red-bg:#3a1512; --purple-bg:#2b1a3f;
+  --mono:ui-monospace,'Cascadia Code','SF Mono',Menlo,Consolas,monospace;
+  --sans:-apple-system,'Segoe UI',system-ui,Roboto,sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.45}
+.wrap{max-width:1180px;margin:0 auto;padding:18px 20px 80px}
+a{color:var(--blue)}
+/* ---------- header ---------- */
+header{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 16px;margin-bottom:4px}
+h1{font-size:21px;margin:0;font-weight:650;letter-spacing:.2px}
+h1 .arrow{color:var(--dim);font-weight:400}
+.stamp{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.stamp.warn{color:var(--amber)}
+.stamp b{color:var(--text);font-weight:600}
+.legend{margin:10px 0 2px;font-size:12px;color:var(--muted)}
+.legend summary{cursor:pointer;user-select:none;color:var(--dim)}
+.legend .items{display:flex;flex-wrap:wrap;gap:6px 18px;padding:10px 2px 4px}
+.legend .items span{white-space:nowrap}
+/* ---------- tabs ---------- */
+.tabs{display:flex;gap:2px;margin:14px 0 18px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.tab{background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-1px;
+  padding:9px 14px;color:var(--muted);cursor:pointer;font:inherit;font-size:14px;font-weight:600;opacity:.85}
+.tab:hover{color:var(--text);opacity:1}
+.tab.active{color:var(--text);border-bottom-color:var(--blue);opacity:1}
+.tab .badge{display:inline-block;margin-left:7px;font-family:var(--mono);font-size:11px;background:var(--red-bg);
+  color:var(--red);border-radius:9px;padding:0 7px;vertical-align:1px}
+.tab .badge:empty{display:none}
+/* ---------- generic panels ---------- */
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:16px}
+.panel h3{margin:0 0 4px;font-size:15px}
+.panel .sub{color:var(--muted);font-size:12.5px;margin:0 0 12px}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:1.2px;color:var(--dim);text-transform:uppercase;margin:0 0 8px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{color:var(--dim);text-align:left;font-weight:600;font-size:11.5px;letter-spacing:.4px;text-transform:uppercase;
+  padding:6px 10px;border-bottom:1px solid var(--line)}
+td{padding:7px 10px;border-bottom:1px solid #1f2c40;vertical-align:top}
+tr:last-child td{border-bottom:none}
+tr.rowlink{cursor:pointer}
+tr.rowlink:hover td{background:#1a2638}
+.num{font-family:var(--mono)}
+.empty{color:var(--dim);padding:14px 4px;font-size:13px}
+/* ---------- chips & icons ---------- */
+.chip{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:11.5px;
+  border-radius:7px;padding:2px 8px;white-space:nowrap;border:1px solid transparent}
+.chip.green{background:var(--green-bg);color:var(--green)}
+.chip.blue{background:var(--blue-bg);color:var(--blue)}
+.chip.amber{background:var(--amber-bg);color:var(--amber)}
+.chip.red{background:var(--red-bg);color:var(--red)}
+.chip.purple{background:var(--purple-bg);color:var(--purple)}
+.chip.dim{background:#202c3f;color:var(--muted)}
+.chip.outline{background:transparent;border-color:var(--line);color:var(--muted)}
+.two-clock{font-family:var(--mono);font-size:12px;line-height:1.5;white-space:nowrap}
+.two-clock .est{color:var(--text);font-weight:600}
+.two-clock .base{color:var(--dim);font-size:11px;display:block}
+.slip{color:var(--amber)}
+/* ---------- Q1 headline ---------- */
+.headline{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid #34496b;
+  border-radius:12px;padding:18px 20px;margin-bottom:16px}
+.hl-line{font-size:15.5px;margin:7px 0;color:var(--muted)}
+.hl-line b{font-family:var(--mono);color:var(--text);font-weight:600;font-size:16px}
+.hl-line .good{color:var(--green)} .hl-line .bad{color:var(--red)} .hl-line .warn{color:var(--amber)}
+.hl-line .lbl{font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:1px;margin-right:8px}
+.pace{margin:16px 4px 6px}
+.pace .track{position:relative;height:8px;border-radius:4px;background:#233450}
+.pace .fill{position:absolute;left:0;top:0;bottom:0;border-radius:4px;background:linear-gradient(90deg,#2f6b46,var(--green))}
+.pace .mark{position:absolute;top:-5px;width:2px;height:18px;background:var(--text)}
+.pace .mark.base{background:var(--dim)} .pace .mark.est{background:var(--amber)}
+.pace .labels{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10.5px;color:var(--dim);margin-top:6px}
+.kpis{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:7px 12px;cursor:default}
+.kpi .v{font-family:var(--mono);font-size:17px;font-weight:600}
+.kpi .k{font-size:11px;color:var(--muted)}
+.copybtn{float:right;background:var(--panel);color:var(--muted);border:1px solid var(--line);border-radius:8px;
+  padding:5px 11px;font:inherit;font-size:12px;cursor:pointer}
+.copybtn:hover{color:var(--text);border-color:#3d5578}
+/* ---------- charts ---------- */
+.chartrow{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:860px){.chartrow{grid-template-columns:1fr}}
+svg text{font-family:var(--mono)}
+.hm{overflow-x:auto}
+.hm table{min-width:640px}
+.hm td{font-family:var(--mono);text-align:center;font-size:12px}
+.hm td.cell{border-radius:6px;border-bottom:4px solid var(--bg)}
+.hm .met{background:var(--green-bg);color:var(--green)}
+.hm .short{background:var(--amber-bg);color:var(--amber)}
+.hm .badshort{background:var(--red-bg);color:var(--red)}
+.hm .future{background:var(--blue-bg);color:var(--blue)}
+.hm .none{background:#1a2436;color:var(--dim)}
+.hm td.cell{cursor:pointer}
+.hm td.cell.sel{outline:2px solid var(--blue);outline-offset:-2px}
+input[type=date],input[type=number]{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:5px 8px;font:inherit;font-size:12px}
+/* original Migration Timeline look */
+table.tl{min-width:760px;border-collapse:separate;border-spacing:0}
+table.tl th{background:#2e75b6;color:#fff;text-transform:none;font-size:12px;letter-spacing:0;padding:8px 10px;border-bottom:2px solid var(--bg)}
+table.tl th.rowh{background:#1b2a44;text-align:left}
+table.tl td{border-bottom:2px solid var(--bg);border-right:2px solid var(--bg)}
+table.tl td.rowh{background:#152238;font-family:var(--sans);text-align:left}
+table.tl td.ttot{background:#152238;font-family:var(--mono);text-align:center;font-weight:700}
+table.tl td.tcell{font-family:var(--mono);text-align:center;padding:8px 10px;background:#1a2436;color:var(--dim)}
+table.tl td.tblue{background:#cfe6f8;color:#123a5e;cursor:pointer;font-weight:600}
+table.tl td.tamber{background:#fbc02d;color:#3a2c00;cursor:pointer;font-weight:700}
+table.tl td.tred{background:#f28b82;color:#3a0a06;cursor:pointer;font-weight:700}
+table.tl td.tcell.sel{outline:2px solid var(--blue);outline-offset:-2px}
+table.tl tr.totrow td{background:#152238;color:var(--text);font-family:var(--mono);text-align:center}
+.missf{font-weight:900;margin-left:3px;color:#3a0a06}
+.tsub{font-size:12px;color:var(--muted);display:inline-flex;align-items:center;gap:6px}
+.sw{width:11px;height:11px;border-radius:3px;display:inline-block}
+.swr{background:#f28b82}.swa{background:#fbc02d}.swb{background:#cfe6f8}.swg{background:#b7e4c7}
+table.tl td.tmet{background:#b7e4c7;color:#0f3d24;cursor:pointer;font-weight:700}
+table.tl th.nowcol{box-shadow:inset 0 -3px 0 var(--amber)}
+.pbar{height:4px;border-radius:2px;background:#0d1420;margin-top:5px;overflow:hidden}
+.pbar div{height:100%;background:var(--green)}
+.pill{display:inline-block;font-family:var(--mono);font-size:10.5px;border-radius:4px;padding:1px 6px;margin-right:3px;background:#1a2436;color:var(--dim);border:1px solid var(--line)}
+.pill-amber{background:var(--amber-bg);color:var(--amber);border-color:transparent}
+.pill-red{background:var(--red-bg);color:var(--red);border-color:transparent}
+.pill-teal{background:var(--green-bg);color:var(--green);border-color:transparent}
+button.chipbtn{border:none;cursor:pointer;font:inherit}
+button.chipbtn.chipon{outline:2px solid var(--blue)}
+.qa{border-bottom:1px solid #1f2c40;padding:10px 2px}
+.qa:last-of-type{border-bottom:none}
+.qa .qq{font-weight:650;cursor:pointer;font-size:14px}
+div.qa .qq{cursor:default}
+.qa .qa-a{margin:6px 0 4px;color:var(--muted);font-size:13.5px}
+.qa .qa-a b{font-family:var(--mono);color:var(--text)}
+.qa .qa-a b.bad{color:var(--red)}.qa .qa-a b.good{color:var(--green)}.qa .qa-a b.warn{color:var(--amber)}
+table.tl td.apmet{background:var(--green-bg);color:var(--green);cursor:pointer;font-weight:600}
+table.tl td.apshort{background:var(--amber-bg);color:var(--amber);cursor:pointer;font-weight:600}
+table.tl td.apbad{background:var(--red-bg);color:var(--red);cursor:pointer;font-weight:700}
+table.tl td.apfut{background:var(--blue-bg);color:var(--blue);cursor:pointer;font-weight:600}
+.hm th.rowh,.hm td.rowh{text-align:left;font-family:var(--sans)}
+/* ---------- Q2 ---------- */
+.stagegroup{margin-bottom:6px}
+.stagegroup .gh{font-family:var(--mono);font-size:12px;color:var(--muted);margin:12px 0 6px}
+.outlook{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:700px){.outlook{grid-template-columns:1fr}}
+.ol-item{display:flex;gap:10px;padding:7px 4px;border-bottom:1px solid #1f2c40;font-size:13px;align-items:baseline}
+.ol-item:last-child{border-bottom:none}
+.ol-item .d{font-family:var(--mono);color:var(--muted);flex:0 0 64px}
+/* ---------- Q3 ---------- */
+.mebar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:14px}
+select,input[type=file]{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font:inherit}
+.winbtns{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.winbtns button{background:var(--panel);color:var(--muted);border:none;padding:6px 12px;font:inherit;font-size:12px;cursor:pointer}
+.winbtns button.on{background:var(--panel2);color:var(--text)}
+.mesummary{font-size:14px;color:var(--muted);margin:2px 0 14px}
+.mesummary b{font-family:var(--mono);color:var(--text)}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:10px}
+.card{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:11px 13px;cursor:pointer}
+.card:hover{border-color:#3d5578}
+.card .rn{font-weight:600;font-size:13.5px;margin-bottom:3px}
+.card .ctx{color:var(--muted);font-size:12.5px;margin-bottom:6px}
+.card .act{font-size:12.5px;margin-top:6px}
+.card .act .alab{font-family:var(--mono);font-size:10.5px;letter-spacing:1px;color:var(--dim);margin-right:6px}
+.card .st{font-size:12px;color:var(--muted);margin-top:3px}
+.sect{margin-bottom:20px}
+.sect h4{margin:0 0 8px;font-size:13.5px;display:flex;align-items:center;gap:8px}
+.sect h4 .cnt{font-family:var(--mono);font-size:11px;color:var(--muted);background:#202c3f;border-radius:8px;padding:0 8px}
+/* ---------- drop zone / modal ---------- */
+#drop{border:2px dashed #3d5578;border-radius:14px;padding:46px 20px;text-align:center;color:var(--muted);margin:30px 0;cursor:pointer}
+#drop.on{background:var(--panel2);border-color:var(--blue)}
+#drop b{color:var(--text)}
+.modalbg{position:fixed;inset:0;background:rgba(5,9,16,.72);display:none;align-items:flex-start;justify-content:center;padding:40px 14px;overflow:auto;z-index:50}
+.modalbg.open{display:flex}
+.modal{background:var(--panel);border:1px solid #3d5578;border-radius:14px;max-width:760px;width:100%;padding:20px 22px}
+.modal h2{margin:0 0 2px;font-size:18px}
+.mclose{float:right;background:none;border:none;color:var(--dim);font-size:20px;cursor:pointer}
+.pipe{display:flex;gap:0;margin:16px 0 6px;flex-wrap:wrap}
+.pstage{flex:1;min-width:120px;padding:9px 10px;border:1px solid var(--line);margin-right:-1px;background:var(--panel2)}
+.pstage:first-child{border-radius:9px 0 0 9px}.pstage:last-child{border-radius:0 9px 9px 0}
+.pstage .pn{font-size:11.5px;font-weight:600;letter-spacing:.3px}
+.pstage .pd{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:4px;line-height:1.5}
+.pstage.done{background:var(--green-bg)} .pstage.cur{border-color:var(--blue);background:var(--blue-bg)}
+.pstage.blockd{background:var(--red-bg)}
+.sl{display:block;font-family:var(--mono);font-size:10.5px;color:var(--muted);line-height:1.55}
+.sl b{color:var(--text);font-weight:600}
+.sl.flag{color:var(--amber)} .sl.flag b{color:var(--amber)}
+.rwhist td{font-size:12.5px}
+.linkrow{margin-top:10px;font-size:13px}
+kbd{font-family:var(--mono);background:#202c3f;border-radius:4px;padding:1px 6px;font-size:11px;color:var(--muted)}
+.srconly{position:absolute;left:-9999px}
+button:focus-visible,.tab:focus-visible,.card:focus-visible,tr:focus-visible{outline:2px solid var(--blue);outline-offset:1px}
+@media(prefers-reduced-motion:no-preference){.card,.tab,.chip{transition:border-color .15s,background .15s}}
 </style>
 </head>
 <body>
+<div class="wrap">
 <header>
-  <div>
-    <h1>ODS &rarr; Snowflake Migration Dashboard</h1>
-    <div class="sub">Live view of Jira tickets tracking database migration status</div>
-  </div>
+  <h1>GDM Migration <span class="arrow">ODS → Snowflake</span></h1>
+  <span class="stamp" id="stamp">No tracker loaded</span>
 </header>
+<details class="legend"><summary>Legend & definitions</summary>
+  <div class="items">
+    <span>🟢 Released</span><span>🔵 Upcoming (Est in the future)</span>
+    <span>🟠 Due soon / a few days late</span><span>⏰ Overdue (Est passed)</span>
+    <span>⛔ Blocked — someone must fix</span><span>🔁 Rework / re-test</span>
+    <span>⚠️ Missing information</span>
+    <span><b style="color:var(--text)">Base</b> = original baseline promise (never moves)</span>
+    <span><b style="color:var(--text)">Reforecast</b> = the current commitment; where none exists the app uses <b style="color:var(--text)">Base</b> — every date is tagged with which one it is</span>
+  </div>
+</details>
 
-<div class="tabs">
-  <button class="tab-btn active" id="tabJiraBtn">Jira Tickets</button>
-  <button class="tab-btn" id="tabTimelineBtn">Migration Timeline</button>
-  <button class="tab-btn" id="tabDataQualityBtn">Tracker Data Quality</button>
+<div id="drop" tabindex="0"><b>Drop the GDM Tracker .xlsx here</b> or click to choose a file<br>
+<span style="font-size:12px">Standalone test build — reads the workbook locally, sends nothing anywhere.</span>
+<input type="file" id="file" accept=".xlsx,.xlsm" class="srconly"></div>
+
+<div id="app" style="display:none">
+<nav class="tabs" role="tablist">
+  <button class="tab active" data-v="q1">Overview</button>
+  <button class="tab" data-v="q3">My actions</button>
+  <button class="tab" data-v="dq">Data issues<span class="badge" id="dqbadge"></span></button>
+</nav>
+<main id="view"></main>
 </div>
-
-<div id="jiraPanel">
-
-<div class="notice-banner" style="background:#fff8e1; border:1px solid #fbc02d; color:#3a2c00; padding:10px 14px; border-radius:6px; margin-bottom:14px; font-size:14px;">
-  <strong>Not yet available:</strong> Jira integration is still pending IT/admin approval and isn't active on this hosted version. Please check back later — in the meantime, the Migration Timeline tab is fully functional.
 </div>
-
-<div id="connectGate" class="connect-gate" style="display:none">
-  <p>This dashboard isn't connected to Jira yet. Click below to sign in and authorize access to your Jira site.</p>
-  <a class="connect-btn" href="/oauth/login">Connect to Jira</a>
-</div>
-
-<div id="siteBadge" class="site-badge" style="display:none"></div>
-
-<div id="mainUi" style="display:none">
-<div class="toolbar">
-  <input type="text" id="jqlInput" placeholder="JQL, e.g. project = MIG ORDER BY updated DESC" />
-  <button id="runBtn">Run</button>
-  <button class="secondary" id="refreshBtn">Refresh</button>
-</div>
-
-<div class="summary" id="summary"></div>
-
-<div class="msg" id="msg"></div>
-
-<main>
-  <table id="table" style="display:none">
-    <thead>
-      <tr>
-        <th>Key</th>
-        <th>Summary</th>
-        <th>Assignee</th>
-        <th>Jira Status</th>
-        <th>Migration Status</th>
-        <th>Updated</th>
-      </tr>
-    </thead>
-    <tbody id="tbody"></tbody>
-  </table>
-</main>
-</div>
-
-</div>
-
-<div id="timelinePanel" style="display:none">
-  <div class="upload-row">
-    <input type="file" id="timelineFileInput" accept=".xlsx,.xls" />
-    <span id="timelineFileStatus" class="msg" style="padding:0"></span>
-  </div>
-
-  <div class="upload-row" id="thresholdRow2" style="display:none; padding-top:0;">
-    <label class="threshold-label">Timeline: overdue &#8805; <input type="number" id="overdueAmberDaysInput" value="2" min="1" class="threshold-input" /> days &rarr; amber</label>
-    <label class="threshold-label">Timeline: overdue &#8805; <input type="number" id="overdueRedDaysInput" value="10" min="1" class="threshold-input" /> days &rarr; red</label>
-    <div class="legend">
-      <span class="legend-item"><span class="legend-swatch swatch-overdue"></span>Overdue (red threshold)</span>
-      <span class="legend-item"><span class="legend-swatch swatch-near"></span>Overdue (amber threshold)</span>
-      <span class="legend-item"><span class="legend-swatch swatch-ok"></span>On track</span>
-      <span class="legend-item"><span class="missing-flag">&#9888;</span>Missing report(s), past months only</span>
-    </div>
-  </div>
-
-  <div class="timeline-wrap">
-    <div id="timelineChartContainer"></div>
-  </div>
-
-  <div id="drilldownContainer" class="drilldown" style="display:none">
-    <button class="close-drilldown" id="closeDrilldownBtn">Close</button>
-    <h3 id="drilldownTitle"></h3>
-    <div style="overflow-x:auto">
-      <table id="drilldownTable">
-        <thead>
-          <tr>
-            <th>Report Name</th>
-            <th>QA Tester</th>
-            <th>Stage</th>
-            <th>Status Start</th>
-            <th>Baseline Completion</th>
-            <th>Actual Completion</th>
-            <th>Status</th>
-            <th>DB Developer</th>
-            <th>PBI Developer</th>
-            <th>Schema</th>
-          </tr>
-        </thead>
-        <tbody id="drilldownTbody"></tbody>
-      </table>
-    </div>
-  </div>
-
-  <div class="upload-row" id="thresholdRow" style="display:none; padding-top:0; align-items:flex-start;">
-    <div class="threshold-block">
-      <label class="threshold-label">Show DB Dev/PBI Dev reports releasing within the next <input type="number" id="upcomingDaysInput" value="30" min="1" class="threshold-input" /> days</label>
-      <div class="threshold-desc">Controls which reports appear in the "Reports coming your way" table below — includes any already overdue DB Dev/PBI Dev reports too.</div>
-    </div>
-  </div>
-
-  <div id="upcomingContainer" class="drilldown" style="display:none; margin-top:0;">
-    <h3>Reports coming your way (DB Dev/PBI Dev, releasing soon)</h3>
-    <p class="upcoming-sub">Reports currently in <b>DB Dev</b> or <b>PBI Dev</b> status with a Baseline completion date inside the window above — so QA testers aren't surprised by a report landing for testing.</p>
-    <div class="upload-row" style="padding:0 0 12px;">
-      <label class="threshold-label">Filter by QA Tester:
-        <select id="upcomingPoFilter" class="threshold-input" style="width:auto; padding:5px 8px;">
-          <option value="">All QA Testers</option>
-        </select>
-      </label>
-      <label class="threshold-label">Filter by month:
-        <select id="upcomingMonthFilter" class="threshold-input" style="width:auto; padding:5px 8px;">
-          <option value="">All months</option>
-        </select>
-      </label>
-    </div>
-    <div style="overflow-x:auto">
-      <table id="upcomingTable">
-        <thead>
-          <tr>
-            <th>QA Tester</th>
-            <th>Report Name</th>
-            <th>Domain</th>
-            <th>Stage</th>
-            <th>Status Start</th>
-            <th>Baseline Completion</th>
-            <th>Days Until Completion</th>
-            <th>Status</th>
-            <th>Why sent back</th>
-            <th>DB Developer</th>
-            <th>PBI Developer</th>
-            <th>Schema</th>
-          </tr>
-        </thead>
-        <tbody id="upcomingTbody"></tbody>
-      </table>
-    </div>
-    <div id="upcomingEmpty" class="msg" style="display:none; padding-left:0;">No DB Dev/PBI Dev-status reports expected in this window.</div>
-  </div>
-
-  <div id="openReworksContainer" class="drilldown" style="display:none; margin-top:0;">
-    <h3>Open reworks (sent back, not yet resolved) <span id="openReworksCount" class="risk-badge blocked" style="margin-left:6px;"></span></h3>
-    <p class="upcoming-sub">Every bounce-back on the <b>Rework Log</b> that is not marked Resolved, plus any report flagged Blocked with no log row at all. <b>UNCLAIMED</b> = the fixer has not yet committed an Expected Fix Date. <b>LATE</b> = the fixer's promised date has passed.</p>
-    <div style="overflow-x:auto">
-      <table id="openReworksTable">
-        <thead>
-          <tr>
-            <th>Report Name</th>
-            <th>From &rarr; To</th>
-            <th>Sent Back</th>
-            <th>Sent Back By</th>
-            <th>What Was Wrong</th>
-            <th>Fixer</th>
-            <th>Promised</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody id="openReworksTbody"></tbody>
-      </table>
-    </div>
-    <div id="openReworksEmpty" class="msg" style="display:none; padding-left:0;">No open reworks &mdash; nothing is bounced back right now.</div>
-  </div>
-
-  <div id="rawTablesContainer" class="drilldown" style="display:none; margin-top:0;">
-    <button class="close-drilldown" id="downloadRawTablesBtn" style="float:right; margin-left:8px;">Download as Excel</button>
-    <button class="close-drilldown" id="toggleRawTablesBtn">Show</button>
-    <h3>Raw Fact Table / Dim Table (for verification)</h3>
-    <p class="upcoming-sub">Every row the app actually computed from the uploaded workbook, exactly as used by the heatmap/drill-down/Coming Your Way/Stage Gaps above — nothing filtered. Collapsed by default since it can be long; click Show to expand, or Download as Excel to save it as a file.</p>
-    <div id="rawTablesBody" style="display:none;">
-      <h4 style="margin:16px 0 8px;">Fact Table (<span id="rawFactCount"></span> rows)</h4>
-      <div style="overflow-x:auto">
-        <table id="rawFactTable">
-          <thead>
-            <tr>
-              <th>Domain</th><th>Status</th><th>Report Name</th><th>DB Developers</th><th>PBI Developers</th>
-              <th>Schema</th><th>PO</th><th>Status Start Date</th><th>Expected Release Date</th><th>Actual Release Date</th>
-            </tr>
-          </thead>
-          <tbody id="rawFactTbody"></tbody>
-        </table>
-      </div>
-      <h4 style="margin:20px 0 8px;">Dim Table (<span id="rawDimCount"></span> rows)</h4>
-      <div style="overflow-x:auto">
-        <table id="rawDimTable">
-          <thead>
-            <tr><th>Domain</th><th>Expected Report Count</th><th>Expected Release Date</th></tr>
-          </thead>
-          <tbody id="rawDimTbody"></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-</div>
-
-<div id="dataQualityPanel" style="display:none">
-  <div class="notice-banner" style="background:#fff8e1; border:1px solid #fbc02d; color:#3a2c00; padding:10px 14px; border-radius:6px; margin-bottom:14px; font-size:14px;">
-    <strong>Tracker data-quality checks:</strong> the tables below flag places where the Combined Delivery Data sheet in the GDM Tracker looks like it was filled in incorrectly or incompletely. Use these to clean up the tracker — they don't affect the Migration Timeline tab's numbers beyond what's already noted in each table's description.
-  </div>
-
-  <div id="gapsContainer" class="drilldown" style="display:none; margin-top:0;">
-    <h3>Stage progression gaps</h3>
-    <p class="upcoming-sub">A completed stage's Actual Release Date should match the Status Start Date of that report's next-stage record (e.g. PBI Dev's Actual Release Date = QA's Status Start Date). Rows below have a completed stage with no matching next-stage record found — either the next stage hasn't been logged yet, or the dates don't line up.</p>
-    <div style="overflow-x:auto">
-      <table id="gapsTable">
-        <thead>
-          <tr>
-            <th>Report Name</th>
-            <th>Domain</th>
-            <th>QA Tester</th>
-            <th>Completed Stage</th>
-            <th>Completed On</th>
-            <th>Expected Next Stage</th>
-          </tr>
-        </thead>
-        <tbody id="gapsTbody"></tbody>
-      </table>
-    </div>
-    <div id="gapsEmpty" class="msg" style="display:none; padding-left:0;">No gaps found — every completed stage has a matching next-stage record.</div>
-  </div>
-
-  <div id="planMonthMismatchContainer" class="drilldown" style="display:none; margin-top:0;">
-    <h3>Plan Delivery Month mismatches</h3>
-    <p class="upcoming-sub">A report's Plan Delivery Month is expected to match the calendar month of its furthest-reached stage's Expected Release Date. Rows below disagree — the heatmap places these reports by Plan Delivery Month instead until the mismatch is resolved.</p>
-    <div style="overflow-x:auto">
-      <table id="planMonthMismatchTable">
-        <thead>
-          <tr>
-            <th>Report Name</th>
-            <th>Domain</th>
-            <th>QA Tester</th>
-            <th>Plan Delivery Month</th>
-            <th>Latest Stage Reached</th>
-            <th>Latest Stage Expected Date</th>
-          </tr>
-        </thead>
-        <tbody id="planMonthMismatchTbody"></tbody>
-      </table>
-    </div>
-    <div id="planMonthMismatchEmpty" class="msg" style="display:none; padding-left:0;">No mismatches found — every report's Plan Delivery Month agrees with its latest stage's Expected Release Date.</div>
-  </div>
-
-  <div id="missingConfirmedDeployedContainer" class="drilldown" style="display:none; margin-top:0;">
-    <h3>Missing Confirmed Deployed Date</h3>
-    <p class="upcoming-sub">Combined Delivery Data's "Status Flag" column marks a report "Delivered" purely based on Current Status = RELEASED IN PROD - it doesn't check Confirmed Deployed Date at all. Rows below are marked Delivered but have no Confirmed Deployed Date on record - go fill it in on Combined Delivery Data.</p>
-    <div style="overflow-x:auto">
-      <table id="missingConfirmedDeployedTable">
-        <thead>
-          <tr>
-            <th>Report Name</th>
-            <th>Domain</th>
-            <th>QA Tester</th>
-          </tr>
-        </thead>
-        <tbody id="missingConfirmedDeployedTbody"></tbody>
-      </table>
-    </div>
-    <div id="missingConfirmedDeployedEmpty" class="msg" style="display:none; padding-left:0;">No gaps found — every report marked Delivered has a Confirmed Deployed Date on record.</div>
-  </div>
-
-  <div id="statusActualMismatchContainer" class="drilldown" style="display:none; margin-top:0;">
-    <h3>Current Status / Actual Completion Date mismatches</h3>
-    <p class="upcoming-sub">Current Status says a report has reached a given stage - which implies every stage before it is done. Rows below have a Current Status implying a prior stage finished, but that prior stage's own Actual Completion Date column is still blank - either that date was never entered, or the dropdown was advanced by mistake.</p>
-    <div style="overflow-x:auto">
-      <table id="statusActualMismatchTable">
-        <thead>
-          <tr>
-            <th>Report Name</th>
-            <th>Domain</th>
-            <th>QA Tester</th>
-            <th>Current Status</th>
-            <th>Missing Actual For Stage</th>
-            <th>That Stage's Baseline Completion Date</th>
-          </tr>
-        </thead>
-        <tbody id="statusActualMismatchTbody"></tbody>
-      </table>
-    </div>
-    <div id="statusActualMismatchEmpty" class="msg" style="display:none; padding-left:0;">No mismatches found — every report's Current Status is backed up by an Actual Completion Date on its prior stage.</div>
-  </div>
-
-  <div id="currentStatusStageMismatchContainer" class="drilldown" style="display:none; margin-top:0;">
-    <h3>Current Status lagging behind completion</h3>
-    <p class="upcoming-sub">Current Status = QA is supposed to mean the report is currently sitting in QA - but if QA Actual Completion Date is already filled in, QA itself is done and the dropdown just hasn't been advanced to DPO Approval yet. Rows below are treated as having reached DPO Approval anyway (same idea as Confirmed Deployed Date implying RELEASED IN PROD) - go update Current Status on Combined Delivery Data to match.</p>
-    <div style="overflow-x:auto">
-      <table id="currentStatusStageMismatchTable">
-        <thead>
-          <tr>
-            <th>Report Name</th>
-            <th>Domain</th>
-            <th>QA Tester</th>
-            <th>Current Status</th>
-            <th>Completed Stage</th>
-            <th>Completed On</th>
-            <th>Treated As</th>
-          </tr>
-        </thead>
-        <tbody id="currentStatusStageMismatchTbody"></tbody>
-      </table>
-    </div>
-    <div id="currentStatusStageMismatchEmpty" class="msg" style="display:none; padding-left:0;">No mismatches found — no report's Current Status is lagging behind a completed stage.</div>
-  </div>
-</div>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<div class="modalbg" id="modalbg"><div class="modal" id="modal" role="dialog" aria-modal="true"></div></div>
 <script>
-let config = null;
-let currentIssues = [];
-
-async function loadConfig() {
-  const res = await fetch('/api/config');
-  if (!res.ok) throw new Error((await res.json()).error || 'Failed to load config');
-  config = await res.json();
-  document.getElementById('jqlInput').value = config.defaultJql || '';
+/*__DATA_LAYER_START__*/
+'use strict';
+// ============ two clocks: Base = baseline promise, Est = reforecast || Base ============
+const ORDER = ['NOT STARTED','DB Dev','PBI Dev','QA','DPO Approval','RELEASED IN PROD'];
+const STAGES = [
+  {key:'DB Dev',  short:'DB',  owner:'DB Developer',          base:'DB Dev Baseline Completion Date',  re:'DB Dev Reforecast Completion Date',  act:'DB Dev Actual Completion Date'},
+  {key:'PBI Dev', short:'PBI', owner:'PBI Developer',         base:'PBI Dev Baseline Completion Date', re:'PBI Dev Reforecast Completion Date', act:'PBI Dev Actual Completion Date'},
+  {key:'QA',      short:'QA',  owner:'QA Tester',             base:'QA Baseline Completion Date',      re:'QA Reforecast Completion Date',      act:'QA Actual Completion Date'},
+  {key:'DPO Approval',short:'DPO',owner:'DPO Approval Reviewer',base:'DPO Approval Baseline Completion Date',re:'DPO Approval Reforecast Completion Date',act:null},
+];
+const CORE_COLS = ['Domain','Report Name','Current Status','Business Value Rank','PO','Schema',
+  'Plan Delivery Date','Plan Delivery Month','Confirmed Deployed?','Confirmed Deployed Date',
+  'UAT Report URL','Production URL','Blocked?','Comments',
+  ...STAGES.flatMap(s=>[s.owner,s.base,s.re,s.act].filter(Boolean))];
+const norm = h => String(h==null?'':h).replace(/\s+/g,' ').trim().toLowerCase();
+const DAY = 86400000;
+function asDate(v){
+  if(v==null||v==='')return null;
+  if(v instanceof Date)return isNaN(v)?null:new Date(v.getFullYear(),v.getMonth(),v.getDate());
+  if(typeof v==='number'&&v>20000&&v<80000){const d=new Date(Date.UTC(1899,11,30)+v*DAY);return new Date(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate());}
+  if(typeof v==='string'){const d=new Date(v);return isNaN(d)?null:new Date(d.getFullYear(),d.getMonth(),d.getDate());}
+  return null;
 }
+const today0 = ()=>{const n=new Date();return new Date(n.getFullYear(),n.getMonth(),n.getDate());};
+const days = (a,b)=>Math.round((b-a)/DAY);
+const fmtD = d=>d?d.toLocaleDateString(undefined,{month:'short',day:'numeric'}):'—';
+const fmtDY = d=>d?d.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}):'—';
+const monKey = d=>d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`:null;
+const monLbl = k=>{if(!k)return '';const[y,m]=k.split('-');return new Date(y,m-1,1).toLocaleDateString(undefined,{month:'short',year:'2-digit'});};
+const clean = s=>String(s==null?'':s).replace(/\s+/g,' ').trim();
+const yes = v=>/^y/i.test(clean(v));
+const isBlocked = v=>/^yes/i.test(clean(v));
+function blockTarget(v){const m=/needs\s+(.+?)\s+to\s+fix/i.exec(clean(v));return m?m[1]:(isBlocked(v)?'other':null);}
 
-async function fetchStatusOptions(sampleKey) {
-  const url = sampleKey
-    ? `/api/status-options?sampleIssueKey=${encodeURIComponent(sampleKey)}`
-    : '/api/status-options';
-  const res = await fetch(url);
-  if (!res.ok) return { type: 'unknown', options: [] };
-  return res.json();
-}
-
-function renderSummary(issues) {
-  const counts = {};
-  issues.forEach((i) => {
-    const s = i.migrationStatus || 'Unset';
-    counts[s] = (counts[s] || 0) + 1;
-  });
-  const el = document.getElementById('summary');
-  el.innerHTML = '';
-  const total = document.createElement('div');
-  total.className = 'chip';
-  total.innerHTML = `Total tickets<b>${issues.length}</b>`;
-  el.appendChild(total);
-  Object.entries(counts).forEach(([status, count]) => {
-    const chip = document.createElement('div');
-    chip.className = 'chip';
-    chip.innerHTML = `${status}<b>${count}</b>`;
-    el.appendChild(chip);
-  });
-}
-
-async function renderTable(issues) {
-  const tbody = document.getElementById('tbody');
-  tbody.innerHTML = '';
-
-  let statusOptions = [];
-  let optionsType = 'unknown';
-  if (issues.length > 0) {
-    const opts = await fetchStatusOptions(issues[0].key);
-    statusOptions = opts.options || [];
-    optionsType = opts.type;
-  }
-
-  issues.forEach((issue) => {
-    const tr = document.createElement('tr');
-
-    const keyTd = document.createElement('td');
-    keyTd.innerHTML = `<a class="key" href="${issue.url}" target="_blank" rel="noopener">${issue.key}</a>`;
-    tr.appendChild(keyTd);
-
-    const summaryTd = document.createElement('td');
-    summaryTd.textContent = issue.summary || '';
-    tr.appendChild(summaryTd);
-
-    const assigneeTd = document.createElement('td');
-    assigneeTd.textContent = issue.assignee || 'Unassigned';
-    tr.appendChild(assigneeTd);
-
-    const statusTd = document.createElement('td');
-    statusTd.innerHTML = `<span class="badge">${issue.status || '—'}</span>`;
-    tr.appendChild(statusTd);
-
-    const migTd = document.createElement('td');
-    if (statusOptions.length > 0) {
-      const select = document.createElement('select');
-      select.className = 'status-edit';
-      const blankOpt = document.createElement('option');
-      blankOpt.value = '';
-      blankOpt.textContent = issue.migrationStatus ? issue.migrationStatus : '(unset)';
-      select.appendChild(blankOpt);
-      statusOptions.forEach((opt) => {
-        const o = document.createElement('option');
-        o.value = opt.value;
-        o.textContent = opt.value;
-        if (opt.value === issue.migrationStatus) o.selected = true;
-        select.appendChild(o);
-      });
-      const saveMsg = document.createElement('span');
-      saveMsg.className = 'save-status';
-      select.addEventListener('change', async () => {
-        if (!select.value) return;
-        saveMsg.textContent = 'Saving…';
-        try {
-          const res = await fetch(`/api/tickets/${encodeURIComponent(issue.key)}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ value: select.value }),
-          });
-          const body = await res.json();
-          if (!res.ok) throw new Error(body.error || 'Update failed');
-          saveMsg.textContent = 'Saved ✓';
-        } catch (err) {
-          saveMsg.textContent = 'Error: ' + err.message;
-        }
-      });
-      migTd.appendChild(select);
-      migTd.appendChild(saveMsg);
-    } else {
-      migTd.innerHTML = `<span class="badge">${issue.migrationStatus || '—'}</span>`;
-    }
-    tr.appendChild(migTd);
-
-    const updatedTd = document.createElement('td');
-    updatedTd.textContent = issue.updated ? new Date(issue.updated).toLocaleString() : '';
-    tr.appendChild(updatedTd);
-
-    tbody.appendChild(tr);
-  });
-
-  document.getElementById('table').style.display = issues.length ? 'table' : 'none';
-}
-
-async function loadTickets() {
-  const msg = document.getElementById('msg');
-  msg.textContent = 'Loading tickets…';
-  msg.classList.remove('error');
-  try {
-    const jql = document.getElementById('jqlInput').value.trim();
-    const res = await fetch(`/api/tickets?jql=${encodeURIComponent(jql)}`);
-    const body = await res.json();
-    if (!res.ok) throw new Error(body.error || 'Failed to load tickets');
-    currentIssues = body.issues || [];
-    renderSummary(currentIssues);
-    await renderTable(currentIssues);
-    msg.textContent = currentIssues.length
-      ? ''
-      : 'No tickets matched this query.';
-  } catch (err) {
-    msg.textContent = err.message;
-    msg.classList.add('error');
-    document.getElementById('table').style.display = 'none';
-  }
-}
-
-document.getElementById('runBtn').addEventListener('click', loadTickets);
-document.getElementById('refreshBtn').addEventListener('click', loadTickets);
-document.getElementById('jqlInput').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') loadTickets();
-});
-
-// ---------------------------------------------------------------------------
-// Tabs
-// ---------------------------------------------------------------------------
-
-const TAB_BUTTON_TO_PANEL = {
-  tabJiraBtn: 'jiraPanel',
-  tabTimelineBtn: 'timelinePanel',
-  tabDataQualityBtn: 'dataQualityPanel',
-};
-Object.keys(TAB_BUTTON_TO_PANEL).forEach((btnId) => {
-  document.getElementById(btnId).addEventListener('click', () => {
-    Object.entries(TAB_BUTTON_TO_PANEL).forEach(([otherBtnId, panelId]) => {
-      const isActive = otherBtnId === btnId;
-      document.getElementById(otherBtnId).classList.toggle('active', isActive);
-      document.getElementById(panelId).style.display = isActive ? 'block' : 'none';
+// ============ parse workbook ============
+function parseWorkbook(wb){
+  const issues=[];
+  const ws=wb.Sheets['Combined Delivery Data'];
+  if(!ws) return {error:'Sheet "Combined Delivery Data" not found — is this the GDM Tracker file?'};
+  const grid=XLSX.utils.sheet_to_json(ws,{header:1,defval:null,raw:true});
+  const hdr=(grid[0]||[]).map(norm);
+  const col={}; CORE_COLS.forEach(c=>{const i=hdr.indexOf(norm(c)); if(i>=0)col[c]=i;});
+  const missingCols=CORE_COLS.filter(c=>col[c]==null);
+  const get=(row,c)=>col[c]==null?null:row[col[c]];
+  const reports=[];
+  for(let r=1;r<grid.length;r++){
+    const row=grid[r]; if(!row) continue;
+    const name=clean(get(row,'Report Name')); if(!name) continue;
+    const status=clean(get(row,'Current Status'))||'NOT STARTED';
+    const rec={name,row:r+1,domain:clean(get(row,'Domain')),status,
+      rank:get(row,'Business Value Rank'),po:clean(get(row,'PO')),schema:clean(get(row,'Schema')),
+      planDate:asDate(get(row,'Plan Delivery Date')),planMonth:clean(get(row,'Plan Delivery Month')),
+      confirmed:yes(get(row,'Confirmed Deployed?')),confirmedDate:asDate(get(row,'Confirmed Deployed Date')),
+      uat:clean(get(row,'UAT Report URL')),prod:clean(get(row,'Production URL')),
+      blockedRaw:clean(get(row,'Blocked?')),comments:clean(get(row,'Comments')),stages:[]};
+    rec.blocked=isBlocked(rec.blockedRaw); rec.blockTarget=blockTarget(rec.blockedRaw);
+    STAGES.forEach((s,i)=>{
+      const base=asDate(get(row,s.base)), re=asDate(get(row,s.re));
+      const act=s.act?asDate(get(row,s.act)):(rec.confirmed||status==='RELEASED IN PROD'?rec.confirmedDate:null);
+      rec.stages.push({i,key:s.key,short:s.short,owner:clean(get(row,s.owner)),base,re,est:(re&&base)?(re>base?re:base):(re||base),act,
+        slip:(re&&base)?days(base,re):0});
     });
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Migration Timeline (client-side Excel upload -> Fact/Dim Table -> heatmap)
-// ---------------------------------------------------------------------------
-
-let factRows = [];      // parsed 'Fact Table' rows
-let dimRows = [];       // parsed 'Dim Table' rows
-let reworkRows = [];    // parsed 'Rework Log' entry rows (one per bounce-back)
-let monthKeys = [];     // e.g. ['2026-04', '2026-05', ...] sorted chronologically
-let monthLabels = {};   // '2026-04' -> 'Apr-26'
-let domainCounts = {};  // domain -> { month key -> expected count, from Dim Table }
-let planMonthMismatches = []; // reports whose Plan Delivery Month disagrees with their latest stage's Expected Release Date
-let reportPlanMonthKey = {}; // Report Name -> month key ('2026-05'), from Plan Delivery Month - the priority source for Dim Table month lookups
-let missingConfirmedDeployedDate = []; // reports whose Status Flag = Delivered (Current Status = RELEASED IN PROD) but Confirmed Deployed Date is blank
-let statusActualMismatches = []; // reports whose Current Status implies a prior stage completed, but that prior stage's own Actual Completion Date is blank
-let currentStatusStageMismatches = []; // reports whose Current Status = QA but QA Actual Completion Date is already filled in - should be DPO Approval
-
-function monthKeyFromDate(d) {
-  if (!(d instanceof Date) || isNaN(d)) return null;
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
-function monthLabelFromDate(d) {
-  return d.toLocaleString('en-US', { month: 'short' }) + '-' + String(d.getFullYear()).slice(-2);
-}
-
-// Which month a Fact Table row counts toward for Dim Table lookups (heatmap
-// found/missing counts, drill-down membership, cell risk). Plan Delivery
-// Month is the priority source - a report stays in ONE month bucket (the one
-// it was planned for) for its whole lifecycle, rather than splitting across
-// months as its individual stages complete on different dates. Falls back to
-// the row's own Expected Release Date only when there's no Plan Delivery
-// Month mapping at all (e.g. a legacy Fact-Table-only upload with no
-// Combined Delivery Data to read Plan Delivery Month from).
-function rowMonthKey(row) {
-  const planKey = reportPlanMonthKey[row['Report Name']];
-  if (planKey) return planKey;
-  return monthKeyFromDate(row['Expected Release Date']);
-}
-
-// ---------------------------------------------------------------------------
-// Risk classification: Overdue / On track / Released
-//
-// Rules:
-//   - Released:  Actual Release Date is filled in — already shipped, no risk.
-//   - Overdue:   No Actual Release Date yet, and Expected Release Date has
-//                already passed (today > expected).
-//   - On track:  Everything else (comfortably in the future, or unscheduled).
-// ---------------------------------------------------------------------------
-
-function getUpcomingDays() {
-  const v = parseInt(document.getElementById('upcomingDaysInput').value, 10);
-  return Number.isFinite(v) && v > 0 ? v : 30;
-}
-function getOverdueAmberDays() {
-  const v = parseInt(document.getElementById('overdueAmberDaysInput').value, 10);
-  return Number.isFinite(v) && v > 0 ? v : 2;
-}
-function getOverdueRedDays() {
-  const v = parseInt(document.getElementById('overdueRedDaysInput').value, 10);
-  return Number.isFinite(v) && v > 0 ? v : 10;
-}
-function daysBetween(a, b) {
-  return Math.round((b - a) / (1000 * 60 * 60 * 24));
-}
-function startOfToday() {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-function currentMonthKey(today) {
-  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-}
-
-function classifyRisk(row, today) {
-  const expected = row['Expected Release Date'];
-  const actual = row['Actual Release Date'];
-  const stage = (row['Status'] || '').toString().trim();
-  // A Blocked report always shows "Blocked", regardless of whether this
-  // stage's own Actual Completion Date happens to be filled in, and
-  // regardless of whether a "Blocked - Needs Return To" target is set. A
-  // filled Actual Completion Date on a blocked report is either stale (left
-  // over from an earlier, now-invalidated pass being reworked) or simply
-  // doesn't matter - the report needs attention either way and shouldn't
-  // read as "Completed"/"Released"/"Rework" instead of "Blocked".
-  if (row['Blocked']) {
-    // The Rework Log is the source of truth for HOW a report is blocked.
-    // Red = truly late (no log row, no owner, or promise passed). Amber =
-    // blocked but moving (promise in the future, or fixed and waiting on
-    // the sender to re-test). Same labels in every table.
-    const returnTo = (row['BlockedReturnTo'] || '').toString().trim();
-    const att = (typeof newestOpenAttempt === 'function') ? newestOpenAttempt(row['Report Name']) : null;
-    if (!att) {
-      return { level: 'blocked', badgeClass: 'overdue', label: 'Blocked - not logged' };
-    }
-    const fixedD = att['Date Fixed'];
-    if (fixedD instanceof Date && !isNaN(fixedD)) {
-      return { level: 'blocked', label: 'Fixed - awaiting re-test' };
-    }
-    const promise = att['Expected Fix Date'];
-    if (!(promise instanceof Date) || isNaN(promise)) {
-      return { level: 'blocked', badgeClass: 'overdue', label: `Blocked - ${returnTo || 'fixer'} - UNCLAIMED` };
-    }
-    const pTxt = `${promise.getMonth() + 1}/${promise.getDate()}`;
-    if (daysBetween(today, promise) < 0) {
-      return { level: 'blocked', badgeClass: 'overdue', label: `Blocked - fix late (promised ${pTxt})` };
-    }
-    return { level: 'blocked', label: `Blocked - promised ${pTxt}` };
+    rec.released = status==='RELEASED IN PROD'||rec.confirmed;
+    rec.curIdx = ORDER.indexOf(status);
+    rec.curStage = (rec.curIdx>=1&&rec.curIdx<=4)?rec.stages[rec.curIdx-1]:null;
+    rec.stageStart = rec.curStage ? (rec.curIdx>=2?rec.stages[rec.curIdx-2].act:null) : null;
+    reports.push(rec);
   }
-  if (actual instanceof Date && !isNaN(actual)) {
-    // A report is only truly "released in prod" once Confirmed Deployed Date
-    // is filled in - which is exactly what DPO Approval's and RELEASED IN
-    // PROD's own Actual Release Date fields both represent (see
-    // GDM_STAGE_ACTUAL_FIELD). Every other stage finishing (DB Dev, PBI Dev,
-    // QA) just means that stage is done, not that the report has shipped.
-    if (stage === 'DPO Approval' || stage === 'RELEASED IN PROD') {
-      return { level: 'released', label: 'Released' };
+  // rework log — headers on row 2; first duplicate header (col A block) wins
+  const rwWs=wb.Sheets['Rework Log']; const reworks=[];
+  if(rwWs){
+    const g=XLSX.utils.sheet_to_json(rwWs,{header:1,defval:null,raw:true});
+    const h=(g[1]||[]).map(norm); const idx={}; 
+    ['Report Name','Date Sent Back','From Stage','To Stage','Sent Back By','What Was Wrong','Resolved?','Expected Fix Date','Date Fixed']
+      .forEach(c=>{idx[c]=h.indexOf(norm(c));});
+    for(let r=2;r<g.length;r++){const row=g[r]; if(!row)continue;
+      const name=clean(idx['Report Name']>=0?row[idx['Report Name']]:null); if(!name)continue;
+      reworks.push({name,sent:asDate(row[idx['Date Sent Back']]),from:clean(row[idx['From Stage']]),to:clean(row[idx['To Stage']]),
+        by:clean(row[idx['Sent Back By']]),why:clean(row[idx['What Was Wrong']]),
+        resolved:yes(row[idx['Resolved?']])||!!asDate(row[idx['Date Fixed']]),
+        expFix:asDate(row[idx['Expected Fix Date']]),fixed:asDate(row[idx['Date Fixed']])});}
+  } else issues.push('Sheet "Rework Log" not found — rework sections are empty.');
+  // Dim Table — banner row 1, headers row 2: Domain | Expected Report Count | Expected Release Date
+  const dimWs=wb.Sheets['Dim Table']; const dim=[];
+  if(dimWs){
+    const g=XLSX.utils.sheet_to_json(dimWs,{header:1,defval:null,raw:true});
+    const h=(g[1]||[]).map(norm);
+    const di=h.indexOf(norm('Domain')), ci=h.indexOf(norm('Expected Report Count')), ei=h.indexOf(norm('Expected Release Date'));
+    for(let r=2;r<g.length;r++){const row=g[r]; if(!row)continue;
+      const dom=clean(row[di]), cnt=Number(row[ci]), d=asDate(row[ei]);
+      if(dom&&cnt&&d)dim.push({domain:dom,count:cnt,mk:monKey(d)});}
+  } else issues.push('Sheet "Dim Table" not found — the targets timeline is empty.');
+  return {reports,reworks,dim,missingCols,issues,foundCols:CORE_COLS.length-missingCols.length,totalCols:CORE_COLS.length};
+}
+
+// ============ compute model ============
+function compute(data){
+  const T=today0(), M={T};
+  const {reports,reworks}=data;
+  const stageOwner=(rec,key)=>{const s=rec.stages.find(x=>x.key===key);return s?s.owner:'';};
+  // cycle-time medians from released reports (prev actual -> actual)
+  const durs=[[],[],[],[]];
+  reports.filter(r=>r.released).forEach(r=>r.stages.forEach((s,i)=>{
+    const start=i===0?null:r.stages[i-1].act;
+    if(s.act&&start&&s.act>=start)durs[i].push(days(start,s.act));}));
+  const med=a=>{if(!a.length)return null;const b=[...a].sort((x,y)=>x-y);return b[Math.floor(b.length/2)];};
+  M.medians=durs.map(d=>med(d)); const fallbackMed=i=>M.medians[i]??10;
+  // per-report finish on both clocks
+  reports.forEach(r=>{
+    const bsrc=r.planDate?'Plan Delivery Date':r.stages[3].base?'DPO Approval Baseline':r.stages[2].base?'QA Baseline':r.stages[1].base?'PBI Dev Baseline':r.stages[0].base?'DB Dev Baseline':null;
+    r.baseFinish = r.planDate||r.stages[3].base||r.stages[2].base||r.stages[1].base||r.stages[0].base||null;
+    r.baseFinishSrc=bsrc;
+    if(r.released){r.releaseDate=r.stages[3].act||r.confirmedDate||null;r.estFinish=r.releaseDate;r.projected=false;r.estFinishSrc='Confirmed Deployed Date';}
+    else{
+      let mx=null,lbl=null;
+      r.stages.forEach(sg=>{[['Reforecast',sg.re],['Baseline',sg.base],['Actual',sg.act]].forEach(([f,d])=>{
+        if(d&&(!mx||d>mx)){mx=d;lbl=`${sg.key} ${f}`;}});});
+      const beyond=mx&&r.baseFinish&&mx>r.baseFinish?mx:(mx&&!r.baseFinish?mx:null);
+      r.estFinish=beyond;
+      r.projected=false;
+      r.estFinishSrc=beyond?lbl:null;
+      r.estAnchor=lbl; r.estAnchorDate=beyond;
     }
-    return { level: 'completed', label: 'Completed' };
-  }
-  if (!(expected instanceof Date) || isNaN(expected)) {
-    return { level: 'ontrack', label: 'On track' };
-  }
-  const daysUntil = daysBetween(today, expected);
-  if (daysUntil < 0) {
-    return { level: 'overdue', label: `Overdue ${Math.abs(daysUntil)}d` };
-  }
-  return { level: 'ontrack', label: 'On track' };
-}
-
-function riskBadgeHtml(risk) {
-  return `<span class="risk-badge ${risk.badgeClass || risk.level}">${risk.label}</span>`;
-}
-
-// Worst risk level found among Fact Table rows for a given domain + month cell,
-// used to color the timeline heatmap cells specifically. Tiered overdue rule only:
-//   - overdue >= overdueRedDays   -> 'overdue' (red)
-//   - overdue >= overdueAmberDays -> 'near'     (amber)
-//   - overdue but < overdueAmberDays -> no flag from this report
-//   - not yet due -> no flag (see classifyRisk() for that case)
-// One report = one row (its furthest stage), scoped to a domain+month cell.
-// BOTH the timeline cell coloring and the drill-down table use this, so the
-// color a cell shows always agrees with the rows its drill-down lists.
-function collapsedReportRows(domain, monthKey) {
-  const cellMatches = factRows.filter((row) => {
-    if (row['Domain'] !== domain) return false;
-    return rowMonthKey(row) === monthKey;
+    const shorten=x=>x?x.replace('DPO Approval','DPO').replace('PBI Dev','PBI').replace('DB Dev','DB'):null;
+    r.estKind=r.released?'released':r.estFinishSrc?'entered':null;
+    r.estShort=r.estKind==='entered'?shorten(r.estFinishSrc):null;
+    r.varDays=(r.baseFinish&&r.estFinish)?days(r.baseFinish,r.estFinish):null;
   });
-  const cellNames = new Set(cellMatches.map((row) => row['Report Name']).filter(Boolean));
-  const latestByReport = new Map();
-  factRows.forEach((row) => {
-    const name = row['Report Name'];
-    if (!name || !cellNames.has(name)) return;
-    if (row['Domain'] !== domain) return;
-    const existing = latestByReport.get(name);
-    if (!existing || stageRank(row['Status']) >= stageRank(existing['Status'])) {
-      latestByReport.set(name, row);
-    }
-  });
-  return Array.from(latestByReport.values());
-}
-
-function computeCellRisk(domain, monthKey, today, overdueAmberDays, overdueRedDays) {
-  let worst = null;
-  collapsedReportRows(domain, monthKey).forEach((row) => {
-    if (String(row['Status'] || '').trim() === 'RELEASED IN PROD') return;
-    // Blocked reports: stage dates are stale by definition, so judge them by
-    // rework truth instead. Truly late (not logged / unclaimed / promise
-    // passed) -> red. Blocked-but-moving (kept promise, awaiting re-test)
-    // -> no color from this report; the drill-down badge tells the story.
-    if (row['Blocked']) {
-      const cr = classifyRisk(row, today);
-      if (cr.badgeClass === 'overdue') worst = 'overdue';
-      return;
-    }
-    const actual = row['Actual Release Date'];
-    if (actual instanceof Date && !isNaN(actual)) return;
-    const expected = row['Expected Release Date'];
-    if (!(expected instanceof Date) || isNaN(expected)) return;
-    const daysUntil = daysBetween(today, expected);
-    if (daysUntil >= 0) return;
-    const overdueBy = Math.abs(daysUntil);
-    if (overdueBy >= overdueRedDays) {
-      worst = 'overdue';
-    } else if (overdueBy >= overdueAmberDays && worst !== 'overdue') {
-      worst = 'near';
-    }
-  });
-  return worst;
-}
-
-// How many fewer DISTINCT reports exist for this domain + month than the Dim
-// Table's Expected Report Count says there should be — same calculation the
-// drill-down title uses, surfaced directly on the heatmap cell. Counts
-// distinct Report Names, not raw Fact Table rows - a single report can have
-// several stage-rows (DB Dev, PBI Dev, QA...) landing in the same month, and
-// that must still only count once, not once per stage.
-function computeCellMissing(domain, monthKey, expectedCount) {
-  const foundNames = new Set();
-  factRows.forEach((row) => {
-    if (row['Domain'] !== domain) return;
-    if (rowMonthKey(row) !== monthKey) return;
-    if (row['Report Name']) foundNames.add(row['Report Name']);
-  });
-  return Math.max(expectedCount - foundNames.size, 0);
-}
-
-// skipBannerRow: some sheets (Dim Table, and the legacy Fact Table fallback)
-// have a one-cell instructional banner in row 1 before the real column
-// headers in row 2. Without skipping it, SheetJS treats that banner text as
-// the header row and every real column (Domain, etc.) silently disappears -
-// so every row this function returns has no usable fields. Pass true for
-// those sheets to start header detection at row 2 instead.
-function excelSheetToRows(workbook, sheetName, skipBannerRow) {
-  const sheet = workbook.Sheets[sheetName];
-  if (!sheet) return [];
-  const opts = { defval: null, raw: true };
-  if (skipBannerRow) opts.range = 1; // 0-indexed: start at row 2
-  return XLSX.utils.sheet_to_json(sheet, opts);
-}
-
-// ---------------------------------------------------------------------------
-// Live Fact Table / Dim Table derivation from "Combined Delivery Data"
-//
-// The workbook's own "Fact Table" sheet is JUST a static reference snapshot -
-// it can lag behind whatever's currently in Combined Delivery Data (edits
-// made after that snapshot was last generated, for example) and is NOT
-// treated as ground truth here. This app always recomputes fresh from
-// Combined Delivery Data on every load, which is the more current and
-// correct behavior even when it disagrees with that snapshot. The rules
-// below are the documented business logic (see the workbook's own README -
-// Instructions tab too), not a byte-for-byte mimicry of that snapshot:
-//
-// - Row COUNT per report comes from Current Status (a manual dropdown),
-//   mapped to its position in the pipeline: NOT STARTED = 0 rows, DB Dev =
-//   1, PBI Dev = 2, QA = 3, DPO Approval = 4, RELEASED IN PROD = 5. A report
-//   still Not Started gets zero rows - no placeholder. This is the one
-//   place this app actually trusts Current Status as the source of truth.
-//   The Current Status dropdown no longer offers "RELEASED IN PROD" as a
-//   selectable option - a report is expected to stay tagged "DPO Approval"
-//   even after it ships, and instead signal being live via a filled-in
-//   Confirmed Deployed Date. So: Current Status = "DPO Approval" AND a
-//   Confirmed Deployed Date is present -> treated as RELEASED IN PROD (5
-//   rows) anyway. The literal "RELEASED IN PROD" status value is still
-//   honored too, for older rows that already have it set.
-// - Each row's Expected Release Date is that stage's own Expected
-//   Completion Date if filled in - the real target once someone sets it -
-//   falling back to that SAME stage's own Actual Completion Date only when
-//   no Expected date exists yet (the common case for historical/migrated
-//   data). Never a date carried over from a different stage.
-// - Each row's Actual Release Date is that stage's own Actual Completion
-//   Date, exactly as recorded, and genuinely blank if not yet filled in -
-//   never guessed or backfilled from a later stage. There's no column
-//   literally named "DPO Approval Actual Completion Date" - Confirmed
-//   Deployed Date is its real-world equivalent, so it's used as DPO
-//   Approval's Actual field too. RELEASED IN PROD uses that same Confirmed
-//   Deployed Date for both its own Expected and Actual Release Date, so it's
-//   often blank until someone fills that in - deliberately not invented.
-// - Status Start Date chains from the PREVIOUS row's own Expected Release
-//   Date (so it inherits that same Expected-first fallback). The very
-//   first row a report has has no Status Start Date at all.
-//
-// This function reshapes Combined Delivery Data into the same
-// one-row-per-stage factRows / one-row-per-domain-month dimRows shape the
-// rest of the app already expects, so every existing feature (heatmap,
-// drill-down, Coming Your Way, stage gaps) keeps working unchanged.
-// ---------------------------------------------------------------------------
-
-const GDM_STAGE_SEQUENCE = ['DB Dev', 'PBI Dev', 'QA', 'DPO Approval', 'RELEASED IN PROD'];
-const GDM_CURRENT_STATUS_STAGE_COUNT = {
-  'NOT STARTED': 0,
-  'DB Dev': 1,
-  'PBI Dev': 2,
-  'QA': 3,
-  'DPO Approval': 4,
-  'RELEASED IN PROD': 5,
-};
-const GDM_STAGE_EXPECTED_FIELD = {
-  'DB Dev': 'DB Dev Expected Completion Date',
-  'PBI Dev': 'PBI Dev Expected Completion Date',
-  'QA': 'QA Expected Completion Date',
-  'DPO Approval': 'DPO Approval Expected Completion Date',
-  'RELEASED IN PROD': 'Confirmed Deployed Date',
-};
-const GDM_STAGE_ACTUAL_FIELD = {
-  'DB Dev': 'DB Dev Actual Completion Date',
-  'PBI Dev': 'PBI Dev Actual Completion Date',
-  'QA': 'QA Actual Completion Date',
-  // There's no column literally named "DPO Approval Actual Completion Date" -
-  // Confirmed Deployed Date is its real-world equivalent (set precisely when
-  // DPO Approval actually completes), so it's used here too.
-  'DPO Approval': 'Confirmed Deployed Date',
-  'RELEASED IN PROD': 'Confirmed Deployed Date',
-};
-// Note: Combined Delivery Data also has a Status Assigned Date and an
-// Estimated Completion Date column per stage, but both are
-// manual-tracking-only for now and deliberately NOT read here.
-
-function isValidDate(d) {
-  return d instanceof Date && !isNaN(d);
-}
-
-const GDM_MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-// Combined Delivery Data has no "Plan Delivery Date" column - only "Plan
-// Delivery Month", a plain month name with no year (e.g. "August"). Resolve
-// it to an actual date by picking whichever of last/this/next year puts the
-// resulting date CLOSEST to today - not just "next upcoming". Plan Delivery
-// Month is now the priority column for Dim Table month lookups across every
-// report (not just Not Started ones), including already-shipped reports
-// whose planned month is well in the past - "next upcoming" would incorrectly
-// push a report planned for, say, May into May of NEXT year once today is
-// past May, which is exactly backwards for a report that already shipped in
-// May this year.
-function planDeliveryMonthToDate(monthText, today) {
-  const name = (monthText || '').toString().trim();
-  if (!name) return null;
-  const idx = GDM_MONTH_NAMES.findIndex((m) => m.toLowerCase() === name.toLowerCase());
-  if (idx === -1) return null;
-  const candidates = [today.getFullYear() - 1, today.getFullYear(), today.getFullYear() + 1].map(
-    (year) => new Date(year, idx + 1, 0) // last day of that month
-  );
-  candidates.sort((a, b) => Math.abs(a - today) - Math.abs(b - today));
-  return candidates[0];
-}
-
-function deriveFactAndDimFromCombinedData(workbook) {
-  const rows = excelSheetToRows(workbook, 'Combined Delivery Data');
-  // Header rename resilience: the tracker renamed stage date columns to
-  // Baseline/Reforecast. Alias them back to the legacy keys the app reads.
-  const headerAliases = [
-    ['DB Dev Baseline Completion Date', 'DB Dev Expected Completion Date'],
-    ['PBI Dev Baseline Completion Date', 'PBI Dev Expected Completion Date'],
-    ['QA Baseline Completion Date', 'QA Expected Completion Date'],
-    ['DPO Approval Baseline Completion Date', 'DPO Approval Expected Completion Date'],
-    ['DB Dev Reforecast Completion Date', 'DB Dev Estimated Completion Date'],
-    ['PBI Dev Reforecast Completion Date', 'PBI Dev Estimated Completion Date'],
-    ['QA Reforecast Completion Date', 'QA Estimated Completion Date'],
-    ['DPO Approval Reforecast Completion Date', 'DPO Approval Estimated Completion Date'],
-  ];
-  rows.forEach(row => {
-    headerAliases.forEach(([newName, legacy]) => {
-      if (row[newName] !== undefined && row[legacy] === undefined) row[legacy] = row[newName];
+  // program numbers — clock 1: Base, clock 2: Est, clock 3: projected finish
+  M.total=reports.length;
+  M.released=reports.filter(r=>r.released).length;
+  M.notStarted=reports.filter(r=>r.curIdx<=0&&!r.released).length;
+  M.blocked=reports.filter(r=>!r.released&&r.blocked).length;
+  M.dueByBase=reports.filter(r=>r.baseFinish&&r.baseFinish<=T).length;
+  M.behindBase=reports.filter(r=>!r.released&&r.baseFinish&&r.baseFinish<=T).length;
+  M.dueByEst=reports.filter(r=>r.estFinish&&r.estFinish<=T).length;
+  M.behindEst=reports.filter(r=>!r.released&&r.estFinish&&r.estFinish<=T).length;
+  M.baseOverdue=M.behindBase;
+  M.estOverdue=reports.filter(r=>!r.released&&r.curStage&&r.curStage.est&&r.curStage.est<T).length;
+  const unrel=reports.filter(r=>!r.released);
+  M.undated=unrel.filter(r=>!r.estFinish).length;
+  M.projFinish=unrel.reduce((m,r)=>{const d=r.estFinish||r.baseFinish;return d&&(!m||d>m)?d:m;},null);
+  M.planEnd=reports.reduce((m,r)=>r.baseFinish&&(!m||r.baseFinish>m)?r.baseFinish:m,null);
+  M.progSlip=(M.projFinish&&M.planEnd)?days(M.planEnd,M.projFinish):null;
+  // reworks
+  const open=reworks.filter(w=>!w.resolved);
+  M.openReworks=open; M.unclaimed=open.filter(w=>!w.expFix);
+  M.rwByReport={}; reworks.forEach(w=>{(M.rwByReport[w.name]=M.rwByReport[w.name]||[]).push(w);});
+  const hasOpenRw=n=>(M.rwByReport[n]||[]).some(w=>!w.resolved);
+  // late list (question 2): late = Est passed; slipping-only = Base passed but Est ok
+  M.late=unrel.filter(r=>(r.estFinish&&r.estFinish<T)||(r.baseFinish&&r.baseFinish<=T)).map(r=>{
+    const reason = r.blocked?{k:'blocked',t:`⛔ Blocked — ${r.blockTarget} must fix`}
+      : hasOpenRw(r.name)?{k:'rework',t:'🔁 In rework'}
+      : r.stages.some(s=>s.slip>0)?{k:'slip',t:`Reforecast +${Math.max(...r.stages.map(s=>s.slip))}d vs Baseline`}
+      : {k:'none',t:'No reason recorded'};
+    return {r,reason,lateEst:r.estFinish&&r.estFinish<T?days(r.estFinish,T):0,
+      lateBase:r.baseFinish&&r.baseFinish<=T?days(r.baseFinish,T):0,
+      inStage:r.stageStart?days(r.stageStart,T):null};
+  }).sort((a,b)=>b.lateEst-a.lateEst||b.lateBase-a.lateBase);
+  M.noReason=M.late.filter(l=>l.reason.k==='none');
+  // 14-day outlook: stage completions (Est) ahead
+  M.outlook=[];
+  unrel.forEach(r=>{const from=Math.max(0,r.curIdx-1);
+    for(let i=from;i<4;i++){const s=r.stages[i]; if(s.act)continue;
+      if(s.est&&days(T,s.est)>-60&&days(T,s.est)<180)
+        M.outlook.push({d:s.est,r,label:i<3?`${s.short} → ${STAGES[i+1].short}`:'Release',stage:s});
+      break;}});
+  M.outlook.sort((a,b)=>a.d-b.d);
+  // people
+  const people=new Set();
+  reports.forEach(r=>r.stages.forEach(s=>{if(s.owner)people.add(s.owner);}));
+  M.people=[...people].sort((a,b)=>a.localeCompare(b));
+  // buckets for one person
+  M.bucketsFor=(P,pred)=>{
+    const B={sent:[],retest:[],overdue:[],due:[],coming:[],blockedIn:[],missing:[]};
+    reworks.forEach(w=>{const rec=reports.find(x=>x.name===w.name); if(!rec)return;
+      if(!w.resolved&&stageOwner(rec,w.to)===P){
+        B.sent.push({rec,w,unclaimedD:!w.expFix&&w.sent?days(w.sent,T):null,
+          lateFix:w.expFix&&w.expFix<T?days(w.expFix,T):0});}
+      if(w.resolved&&stageOwner(rec,w.from)===P&&!rec.released){
+        const st=rec.stages.find(x=>x.key===w.from);
+        if(st&&(!st.act||(w.fixed&&st.act<w.fixed)))B.retest.push({rec,w,sinceFix:w.fixed?days(w.fixed,T):null});}
     });
-  });
-  const derivedFact = [];
-  const reportRepresentativeDate = {}; // Report Name -> Date, drives Dim Table grouping
-  const reportDomain = {};
-  const today = startOfToday();
-  // Data-integrity check: a report's Plan Delivery Month is expected to match
-  // the calendar month of its latest/furthest reached stage's Expected
-  // Release Date. When they disagree, that's flagged here for the "Plan
-  // Delivery Month mismatches" table, and Plan Delivery Month's own resolved
-  // date is used as the fallback grouping date instead of the (apparently
-  // stale or wrong) stage date - see below.
-  const planMonthMismatches = [];
-  const reportPlanMonthKeyLocal = {}; // Report Name -> month key, from Plan Delivery Month
-  // Data-integrity check: Combined Delivery Data's "Status Flag" column is a
-  // formula that resolves to "Delivered" precisely when Current Status =
-  // "RELEASED IN PROD" (literally) - nothing else. That formula doesn't
-  // check Confirmed Deployed Date at all, so a report can be marked
-  // "Delivered" there while Confirmed Deployed Date is still blank. Flagged
-  // here rather than trusting the sheet's own (possibly stale/uncalculated)
-  // "Status Flag" cell text, since this app can't evaluate Excel formulas.
-  const missingConfirmedDeployedDate = [];
-  // Data-integrity check: Current Status says a report has REACHED a given
-  // stage (that's what drives its row count, per the rule above), but if the
-  // stage immediately before it has no Actual Completion Date on record, that
-  // implies the report was advanced without ever recording that the prior
-  // stage actually finished - either someone forgot to fill in that date, or
-  // the dropdown was bumped ahead by mistake. Capped before RELEASED IN PROD
-  // (DB Dev has no prior stage to check at all, and RELEASED IN PROD's
-  // "prior stage" check would just duplicate the Missing Confirmed Deployed
-  // Date table above, since RELEASED IN PROD's own prior-stage Actual field
-  // is that same Confirmed Deployed Date column).
-  const statusActualMismatches = [];
-  // Data-integrity check: Current Status = "QA" is supposed to mean the
-  // report is CURRENTLY sitting in QA, not that QA has already finished -
-  // but if QA Actual Completion Date is already filled in, QA itself is
-  // done and the dropdown just hasn't been advanced to DPO Approval yet.
-  // Flagged here, and the app treats the report as having reached DPO
-  // Approval anyway (same idea as the existing DPO Approval + Confirmed
-  // Deployed Date -> RELEASED IN PROD inference above).
-  const currentStatusStageMismatches = [];
-
-  rows.forEach((row) => {
-    const name = (row['Report Name'] || '').toString().trim();
-    if (!name) return;
-    const domain = (row['Domain'] || '').toString().trim() || 'Unmapped - needs domain assignment';
-    const po = row['QA Tester']; // Fact Table's "PO" field intentionally shows the QA Tester's name, not the real PO column
-    const dbDev = row['DB Developer'];
-    const pbiDev = row['PBI Developer'];
-    const schema = row['Schema'];
-    // Blocked? is now a single dropdown: "No", "Yes - other", or
-    // "Yes - needs <Stage> to fix" (Blocked - Needs Return To and Blocked At
-    // were folded into this one column and removed from the tracker).
-    const blockedRaw = (row['Blocked?'] || '').toString().trim();
-    const isBlocked = blockedRaw.toLowerCase().startsWith('yes');
-    const planDate = planDeliveryMonthToDate(row['Plan Delivery Month'], today);
-
-    if ((row['Current Status'] || '').toString().trim() === 'RELEASED IN PROD' && !isValidDate(row['Confirmed Deployed Date'])) {
-      missingConfirmedDeployedDate.push({ 'Report Name': name, 'Domain': domain, 'PO': po });
-    }
-
-    // Plan Delivery Month is the priority column for which month a report
-    // counts toward in the Dim Table lookup (heatmap found/missing counts,
-    // drill-down, and cell risk) - not whichever month an individual stage's
-    // Expected Release Date happens to fall in. This keeps a report in ONE
-    // month bucket (the one it was planned for) throughout its whole
-    // lifecycle, rather than splitting across months as it progresses.
-    if (planDate) reportPlanMonthKeyLocal[name] = monthKeyFromDate(planDate);
-
-    reportDomain[name] = domain;
-
-    const currentStatus = (row['Current Status'] || '').toString().trim();
-    const confirmedDeployedDate = row['Confirmed Deployed Date'];
-    const qaActualCompletionDate = row['QA Actual Completion Date'];
-    // Extract the return-to stage, if any, straight out of the Blocked?
-    // text itself (e.g. "Yes - needs QA to fix" -> "QA"). "Yes - other" and
-    // "No" both yield no return-to stage.
-    let neededReturnTo = '';
-    for (const stage of GDM_STAGE_SEQUENCE) {
-      if (blockedRaw.indexOf(`needs ${stage} to fix`) !== -1) { neededReturnTo = stage; break; }
-    }
-    // When a report is Blocked with a specific "needs <Stage> to fix" target,
-    // THAT stage is the report's real current stage for row-count purposes -
-    // Current Status itself may not have been rolled back yet to reflect it.
-    // Falls back to the literal Current Status otherwise (not blocked, or
-    // blocked as "Yes - other" with no specific stage to return to).
-    const effectiveStatus = (isBlocked && neededReturnTo) ? neededReturnTo : currentStatus;
-    let stageCount = GDM_CURRENT_STATUS_STAGE_COUNT[effectiveStatus] ?? 0;
-    if (effectiveStatus === 'QA' && isValidDate(qaActualCompletionDate) && !isBlocked) {
-      // QA itself is already done (Actual Completion Date filled in), but
-      // Current Status hasn't been advanced past QA yet - treat as DPO
-      // Approval instead of stopping at QA, and flag the mismatch. Skipped
-      // entirely when the report is Blocked - Combined Delivery Data's own
-      // "Blocked At" formula (`Blocked at <Current Status>` when there's no
-      // Needs Return To target) means Current Status is deliberately
-      // accurate: the report is genuinely stuck at that stage because it's
-      // blocked, not because someone forgot to advance the dropdown.
-      stageCount = GDM_CURRENT_STATUS_STAGE_COUNT['DPO Approval'];
-      currentStatusStageMismatches.push({
-        'Report Name': name,
-        'Domain': domain,
-        'PO': po,
-        'Current Status': currentStatus,
-        'Implied Stage': 'DPO Approval',
-        'Completed Stage': 'QA',
-        'Completed On': qaActualCompletionDate,
-      });
-    }
-    if (effectiveStatus === 'DPO Approval' && isValidDate(confirmedDeployedDate)) {
-      // Dropdown no longer offers "RELEASED IN PROD" - infer it instead.
-      stageCount = GDM_CURRENT_STATUS_STAGE_COUNT['RELEASED IN PROD'];
-    }
-
-    if (stageCount === 0) {
-      // Not Started: zero Fact Table rows, per this tracker's own rule.
-      // Still note a representative date via Plan Delivery Month so the
-      // derived Dim Table fallback (used only if no manual Dim Table sheet
-      // exists) can place it on the heatmap.
-      if (planDate) reportRepresentativeDate[name] = planDate;
-      return;
-    }
-
-    const stagesToEmit = GDM_STAGE_SEQUENCE.slice(0, stageCount);
-    let prevExpectedRelease = null; // first row's Status Start Date is always blank
-    let lastKnownDate = null;
-    // Raw Expected Completion Date column value for the furthest stage that
-    // actually HAS one - NOT the Expected-or-Actual fallback used everywhere
-    // else in this function. This is what the Plan Delivery Month mismatch
-    // check below compares against: purely Combined Delivery Data's own
-    // "Plan Delivery Month" column vs. that same stage's own Expected
-    // Completion Date column (e.g. "QA Expected Completion Date"). Capped at
-    // DPO Approval - RELEASED IN PROD has no true Expected Completion Date
-    // column of its own (Confirmed Deployed Date is a deployment-confirmation
-    // field, not an Expected Completion Date), so a report that's reached
-    // RELEASED IN PROD is still compared against its DPO Approval Expected
-    // Completion Date. If that column is blank, there's nothing to compare -
-    // no flag either way.
-    let latestStageRawExpected = null;
-    let latestStageWithExpected = null;
-    const actByStage = {};
-    stagesToEmit.forEach((stage) => {
-      const expField = GDM_STAGE_EXPECTED_FIELD[stage];
-      const actField = GDM_STAGE_ACTUAL_FIELD[stage];
-      const expRaw = expField ? row[expField] : null;
-      const actRaw = actField ? row[actField] : null;
-      const exp = isValidDate(expRaw) ? expRaw : null;
-      const act = isValidDate(actRaw) ? actRaw : null;
-      actByStage[stage] = act;
-
-      // Expected Completion Date takes priority when filled in - it's the
-      // real target once someone sets it. Falls back to that same stage's
-      // own Actual Completion Date only when no Expected date exists yet
-      // (the common case for historical/migrated data, which usually only
-      // ever got an Actual recorded).
-      const expectedRelease = exp || act || null;
-      const actualRelease = act || null;
-
-      derivedFact.push({
-        'Domain': domain, 'Status': stage, 'Report Name': name,
-        'DB Developers ': dbDev, 'PBI Developers': pbiDev, 'Schema': schema, 'PO': po,
-        'Status Start Date': prevExpectedRelease, 'Expected Release Date': expectedRelease, 'Actual Release Date': actualRelease,
-        'Blocked': isBlocked, 'BlockedReturnTo': neededReturnTo || null,
-      });
-
-      prevExpectedRelease = expectedRelease;
-      if (expectedRelease) lastKnownDate = expectedRelease;
-      if (stage !== 'RELEASED IN PROD') {
-        // Overwritten each loop up through DPO Approval; never advances past
-        // it, since RELEASED IN PROD has no true Expected Completion Date.
-        latestStageRawExpected = exp;
-        latestStageWithExpected = stage;
+    reports.forEach(r=>{
+      if(r.released)return;
+      const cs=r.curStage;
+      if(cs&&cs.owner===P&&!r.blocked&&!B.sent.some(x=>x.rec===r)&&!B.retest.some(x=>x.rec===r)){
+        if(cs.est&&cs.est<T)B.overdue.push({rec:r,s:cs,lateD:days(cs.est,T)});
+        else if(cs.est&&cs.est>=T&&pred(cs.est))B.due.push({rec:r,s:cs});
       }
+      if(r.curIdx>=1&&r.curIdx<=3){const prev=r.stages[r.curIdx-1],nxt=r.stages[r.curIdx];
+        if(nxt.owner===P){
+          if(r.blocked)B.blockedIn.push({rec:r,s:prev});
+          else if(prev.est&&(pred(prev.est)||prev.est<T))B.coming.push({rec:r,s:prev,overdue:prev.est<T?days(prev.est,T):0});}}
+      r.stages.forEach(s=>{
+        if(s.owner===P&&!s.act&&!s.base&&r.curIdx-1<=s.i)
+          B.missing.push({rec:r,txt:`No ${s.key} baseline date — the timeline can't place it.`,act:`Add the ${s.key} Base date`});});
+      if(cs&&cs.owner===P&&r.blocked&&!(M.rwByReport[r.name]||[]).length)
+        B.missing.push({rec:r,txt:'Marked Blocked but nothing on the Rework Log.',act:'Log the send-back on Rework Log'});
     });
-
-    // Current Status / Actual Completion Date mismatch check: the stage this
-    // report is CURRENTLY sitting in (the last one emitted above) implies
-    // every stage before it is done - so that immediately-prior stage should
-    // have its own Actual Completion Date filled in. If not, flag it.
-    const currentStageName = stagesToEmit[stagesToEmit.length - 1];
-    const currentStageIdx = GDM_STAGE_SEQUENCE.indexOf(currentStageName);
-    const priorStageName = currentStageIdx > 0 ? GDM_STAGE_SEQUENCE[currentStageIdx - 1] : null;
-    if (priorStageName && currentStageName !== 'RELEASED IN PROD' && !actByStage[priorStageName]) {
-      const priorExpField = GDM_STAGE_EXPECTED_FIELD[priorStageName];
-      statusActualMismatches.push({
-        'Report Name': name,
-        'Domain': domain,
-        'PO': po,
-        'Current Status': currentStatus,
-        'Missing Actual For Stage': priorStageName,
-        'Prior Stage Expected Completion Date': priorExpField ? (isValidDate(row[priorExpField]) ? row[priorExpField] : null) : null,
-      });
-    }
-
-    if (latestStageRawExpected && planDate && latestStageRawExpected.getMonth() !== planDate.getMonth()) {
-      // Mismatch: Plan Delivery Month disagrees with the furthest stage that
-      // actually has an Expected Completion Date column (raw value, not the
-      // Expected-or-Actual fallback). Flag it, and prefer Plan Delivery
-      // Month's resolved date for grouping - it's the more deliberately-set
-      // of the two.
-      planMonthMismatches.push({
-        'Report Name': name,
-        'Domain': domain,
-        'PO': po,
-        'Plan Delivery Month': (row['Plan Delivery Month'] || '').toString().trim(),
-        'Latest Stage Reached': latestStageWithExpected,
-        'Latest Stage Expected Date': latestStageRawExpected,
-      });
-      reportRepresentativeDate[name] = planDate;
-    } else if (lastKnownDate) {
-      reportRepresentativeDate[name] = lastKnownDate;
-    } else if (planDate) {
-      reportRepresentativeDate[name] = planDate;
-    }
-  });
-
-  const dimMap = {};
-  Object.keys(reportRepresentativeDate).forEach((name) => {
-    const d = reportRepresentativeDate[name];
-    const domain = reportDomain[name];
-    const key = `${domain}|${d.getFullYear()}-${d.getMonth()}`;
-    if (!dimMap[key]) dimMap[key] = { domain, year: d.getFullYear(), month: d.getMonth(), count: 0 };
-    dimMap[key].count += 1;
-  });
-  const derivedDim = Object.values(dimMap).map((e) => ({
-    'Domain': e.domain,
-    'Expected Report Count': e.count,
-    'Expected Release Date': new Date(e.year, e.month + 1, 0), // last day of month
-  }));
-
-  return { factRows: derivedFact, dimRows: derivedDim, planMonthMismatches, reportPlanMonthKey: reportPlanMonthKeyLocal, missingConfirmedDeployedDate, statusActualMismatches, currentStatusStageMismatches };
-}
-
-// ---------------------------------------------------------------------------
-// Open Reworks - unresolved Rework Log rows (sent back, not yet fixed)
-// ---------------------------------------------------------------------------
-function escapeHtml(s) {
-  return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
-    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-}
-
-function isClosedResolution(v) {
-  const res = String(v || '').trim().toLowerCase();
-  return res === 'yes' || res === 'did not pass re-test';
-}
-
-// newest OPEN attempt for a report (rejected + accepted attempts are history)
-function newestOpenAttempt(reportName) {
-  let best = null;
-  reworkRows.forEach(r => {
-    if (r['Report Name'] !== reportName || isClosedResolution(r['Resolved?'])) return;
-    const d = r['Date Sent Back'] instanceof Date ? r['Date Sent Back'].getTime() : 0;
-    const bd = best && best['Date Sent Back'] instanceof Date ? best['Date Sent Back'].getTime() : -1;
-    if (!best || d >= bd) best = r;
-  });
-  return best;
-}
-
-function attemptCountFor(reportName) {
-  return reworkRows.filter(r => r['Report Name'] === reportName).length;
-}
-
-function computeReworkStatus(row, today) {
-  const sent = row['Date Sent Back'] instanceof Date ? row['Date Sent Back'] : null;
-  const promised = row['Expected Fix Date'] instanceof Date ? row['Expected Fix Date'] : null;
-  const fixed = row['Date Fixed'] instanceof Date ? row['Date Fixed'] : null;
-  const day = 24 * 60 * 60 * 1000;
-  if (!sent) return { cls: 'overdue', label: 'Missing sent-back date' };
-  if (fixed) {
-    const took = Math.floor((fixed - sent) / day);
-    return { cls: 'released', label: `Fixed in ${took} d - awaiting re-test` };
-  }
-  const daysOpen = Math.floor((today - sent) / day);
-  if (!promised) return { cls: 'overdue', label: `UNCLAIMED ${daysOpen} d` };
-  if (today > promised) {
-    const late = Math.floor((today - promised) / day);
-    return { cls: 'overdue', label: `${late} d LATE` };
-  }
-  return { cls: 'rework', label: `Open ${daysOpen} d` };
-}
-
-function renderOpenReworks() {
-  const tbody = document.getElementById('openReworksTbody');
-  const empty = document.getElementById('openReworksEmpty');
-  const count = document.getElementById('openReworksCount');
-  tbody.innerHTML = '';
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  const open = reworkRows.filter(r => {
-    if (!r['Report Name']) return false;
-    const res = String(r['Resolved?'] || '').trim().toLowerCase();
-    return res !== 'yes' && res !== 'did not pass re-test';
-  });
-  count.textContent = String(open.length);
-  count.style.display = open.length ? '' : 'none';
-  empty.style.display = open.length ? 'none' : 'block';
-  document.getElementById('openReworksTable').style.display = open.length ? '' : 'none';
-  const fmt = d => (d instanceof Date) ? `${d.getMonth() + 1}/${d.getDate()}` : '';
-  open
-    .sort((a, b) => (a['Date Sent Back'] || 0) - (b['Date Sent Back'] || 0))
-    .forEach(r => {
-      const st = computeReworkStatus(r, today);
-      const tr = document.createElement('tr');
-      const cells = [
-        r['Report Name'],
-        `${r['From Stage'] || ''} \u2192 ${r['To Stage'] || ''}`,
-        fmt(r['Date Sent Back']),
-        r['Sent Back By'] || '',
-        r['What Was Wrong'] || '',
-        r['Fixed By'] || '',
-        fmt(r['Expected Fix Date']),
-      ];
-      cells.forEach(v => {
-        const td = document.createElement('td');
-        td.textContent = v == null ? '' : String(v);
-        tr.appendChild(td);
-      });
-      const tdSt = document.createElement('td');
-      const span = document.createElement('span');
-      span.className = 'risk-badge ' + st.cls;
-      span.textContent = st.label;
-      tdSt.appendChild(span);
-      tr.appendChild(tdSt);
-      tbody.appendChild(tr);
-    });
-
-  // Truly late but invisible to the log: reports flagged Blocked on the main
-  // tab with NO open Rework Log row at all. They belong in this panel too -
-  // a block nobody logged is the most overdue kind of open rework.
-  const seenBlocked = new Set();
-  const notLogged = [];
-  factRows.forEach((row) => {
-    const name = row['Report Name'];
-    if (!name || !row['Blocked'] || seenBlocked.has(name)) return;
-    seenBlocked.add(name);
-    if (!newestOpenAttempt(name)) notLogged.push(row);
-  });
-  notLogged.forEach((row) => {
-    const tr = document.createElement('tr');
-    const vals = [row['Report Name'],
-      `\u2192 ${(row['BlockedReturnTo'] || '?').toString().trim() || '?'}`,
-      '\u2014', '\u2014'];
-    vals.forEach(v => {
-      const td = document.createElement('td');
-      td.textContent = v;
-      tr.appendChild(td);
-    });
-    const tdWhy = document.createElement('td');
-    tdWhy.innerHTML = '<span class="risk-badge overdue">Not logged on Rework Log</span>';
-    tr.appendChild(tdWhy);
-    ['\u2014', '\u2014'].forEach(v => {
-      const td = document.createElement('td');
-      td.textContent = v;
-      tr.appendChild(td);
-    });
-    const tdSt = document.createElement('td');
-    tdSt.innerHTML = '<span class="risk-badge overdue">Blocked - not logged</span>';
-    tr.appendChild(tdSt);
-    tbody.appendChild(tr);
-  });
-  const totalShown = open.length + notLogged.length;
-  count.textContent = String(totalShown);
-  count.style.display = totalShown ? '' : 'none';
-  empty.style.display = totalShown ? 'none' : 'block';
-  document.getElementById('openReworksTable').style.display = totalShown ? '' : 'none';
-}
-
-async function loadWorkbookFromBuffer(buf, sourceLabel) {
-  const statusEl = document.getElementById('timelineFileStatus');
-  const workbook = XLSX.read(buf, { type: 'array', cellDates: true });
-
-  // Fact Table: auto-derived from Combined Delivery Data when present (each
-  // report's stage history, rebuilt from its completion dates), otherwise
-  // read directly from a legacy Fact Table sheet.
-  //
-  // Dim Table: always read directly from the "Dim Table" sheet - this stays
-  // a manually-maintained, editable planning tool (expected report counts
-  // per domain/month), independent of Combined Delivery Data. That's what
-  // lets domains/months with no reports logged yet (future work) still show
-  // up on the heatmap as planned capacity. Only falls back to deriving it
-  // from Combined Delivery Data if no Dim Table sheet exists at all.
-  const hasCombinedData = !!workbook.Sheets['Combined Delivery Data'];
-  const derived = hasCombinedData ? deriveFactAndDimFromCombinedData(workbook) : null;
-
-  factRows = hasCombinedData ? derived.factRows : excelSheetToRows(workbook, 'Fact Table', true);
-  planMonthMismatches = derived ? derived.planMonthMismatches : [];
-  reportPlanMonthKey = derived ? derived.reportPlanMonthKey : {}; // {} for legacy Fact-Table-only uploads - falls back to Expected Release Date, see rowMonthKey()
-  missingConfirmedDeployedDate = derived ? derived.missingConfirmedDeployedDate : [];
-  statusActualMismatches = derived ? derived.statusActualMismatches : [];
-  currentStatusStageMismatches = derived ? derived.currentStatusStageMismatches : [];
-
-  const manualDimRows = excelSheetToRows(workbook, 'Dim Table', true);
-  dimRows = manualDimRows.length ? manualDimRows : (derived ? derived.dimRows : []);
-
-  // Rework Log: banner row 1, headers row 2 - same shape as Combined Delivery Data
-  reworkRows = excelSheetToRows(workbook, 'Rework Log', true)
-    .filter(r => r['Report Name']);
-
-  if (!dimRows.length) {
-    throw new Error('No "Dim Table" sheet, and no "Combined Delivery Data" sheet with usable dates, found in this file.');
-  }
-
-  buildTimeline();
-  renderUpcomingForPO();
-  renderOpenReworks();
-  renderStageGaps();
-  renderPlanMonthMismatches();
-  renderMissingConfirmedDeployedDate();
-  renderStatusActualMismatches();
-  renderCurrentStatusStageMismatches();
-  renderRawTables();
-  statusEl.textContent = `Loaded ${factRows.length} report rows, ${dimRows.length} timeline rows from ${sourceLabel}.`;
-  statusEl.classList.remove('error');
-  document.getElementById('drilldownContainer').style.display = 'none';
-  document.getElementById('thresholdRow').style.display = 'flex';
-  document.getElementById('thresholdRow2').style.display = 'flex';
-  document.getElementById('upcomingContainer').style.display = 'block';
-  document.getElementById('openReworksContainer').style.display = 'block';
-  document.getElementById('gapsContainer').style.display = 'block';
-  document.getElementById('planMonthMismatchContainer').style.display = 'block';
-  document.getElementById('missingConfirmedDeployedContainer').style.display = 'block';
-  document.getElementById('statusActualMismatchContainer').style.display = 'block';
-  document.getElementById('currentStatusStageMismatchContainer').style.display = 'block';
-}
-
-document.getElementById('timelineFileInput').addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  const statusEl = document.getElementById('timelineFileStatus');
-  if (!file) return;
-  statusEl.textContent = 'Reading ' + file.name + '…';
-  statusEl.classList.remove('error');
-  try {
-    const buf = await file.arrayBuffer();
-    await loadWorkbookFromBuffer(buf, file.name);
-  } catch (err) {
-    statusEl.textContent = 'Error: ' + err.message;
-    statusEl.classList.add('error');
-  }
-});
-
-// Auto-load a default workbook (data/GDM_Tracker_latest.xlsx, alongside
-// this page) on startup if one is present, so the dashboard shows data
-// immediately without requiring a manual upload. Uploading a file at any
-// time still overrides it. Replace this file whenever the team has a newer
-// tracker export - the filename stays the same so no code change is needed.
-async function tryAutoLoadDefaultWorkbook() {
-  const statusEl = document.getElementById('timelineFileStatus');
-  try {
-    const res = await fetch('data/GDM_Tracker_latest.xlsx', { cache: 'no-store' });
-    if (!res.ok) return;
-    const buf = await res.arrayBuffer();
-    await loadWorkbookFromBuffer(buf, 'GDM_Tracker_latest.xlsx (auto-loaded)');
-  } catch (err) {
-    // No default file available (or not served) — that's fine, manual upload still works.
-  }
-}
-tryAutoLoadDefaultWorkbook();
-
-document.getElementById('upcomingDaysInput').addEventListener('change', () => {
-  if (factRows.length) renderUpcomingForPO();
-});
-document.getElementById('upcomingPoFilter').addEventListener('change', () => {
-  if (factRows.length) renderUpcomingForPO();
-});
-document.getElementById('upcomingMonthFilter').addEventListener('change', () => {
-  if (factRows.length) renderUpcomingForPO();
-});
-document.getElementById('overdueAmberDaysInput').addEventListener('change', () => {
-  if (dimRows.length) buildTimeline();
-});
-document.getElementById('overdueRedDaysInput').addEventListener('change', () => {
-  if (dimRows.length) buildTimeline();
-});
-
-function buildTimeline() {
-  // Collect all months present in the Dim Table, sorted chronologically
-  const monthSet = new Map(); // key -> label
-  dimRows.forEach((row) => {
-    const d = row['Expected Release Date'];
-    const key = monthKeyFromDate(d);
-    if (key) monthSet.set(key, monthLabelFromDate(d));
-  });
-  monthKeys = Array.from(monthSet.keys()).sort();
-  monthLabels = Object.fromEntries(monthSet.entries());
-
-  // Domain -> { month key -> count }
-  const domainOrder = [];
-  domainCounts = {};
-  dimRows.forEach((row) => {
-    const domain = row['Domain'];
-    if (!domain) return;
-    const key = monthKeyFromDate(row['Expected Release Date']);
-    if (!key) return;
-    if (!domainCounts[domain]) {
-      domainCounts[domain] = {};
-      domainOrder.push(domain);
-    }
-    const count = Number(row['Expected Report Count']) || 0;
-    domainCounts[domain][key] = (domainCounts[domain][key] || 0) + count;
-  });
-
-  renderTimelineTable(domainOrder, domainCounts);
-}
-
-function renderTimelineTable(domainOrder, domainCounts) {
-  const container = document.getElementById('timelineChartContainer');
-  container.innerHTML = '';
-
-  const table = document.createElement('table');
-  table.className = 'timeline';
-
-  const thead = document.createElement('thead');
-  const headRow = document.createElement('tr');
-  headRow.innerHTML =
-    '<th class="domain-col">Data Product</th><th>Total</th>' +
-    monthKeys.map((k) => `<th>${monthLabels[k]}</th>`).join('');
-  thead.appendChild(headRow);
-  table.appendChild(thead);
-
-  const tbody = document.createElement('tbody');
-  let grandTotal = 0;
-  const monthTotals = {};
-  monthKeys.forEach((k) => (monthTotals[k] = 0));
-
-  const today = startOfToday();
-  const overdueAmberDays = getOverdueAmberDays();
-  const overdueRedDays = getOverdueRedDays();
-  const thisMonthKey = currentMonthKey(today);
-
-  domainOrder.forEach((domain) => {
-    const tr = document.createElement('tr');
-    const counts = domainCounts[domain];
-    const rowTotal = Object.values(counts).reduce((a, b) => a + b, 0);
-    grandTotal += rowTotal;
-
-    let rowHtml = `<td class="domain-col">${domain}</td><td>${rowTotal}</td>`;
-    monthKeys.forEach((k) => {
-      const val = counts[k];
-      if (val) {
-        monthTotals[k] += val;
-        const risk = computeCellRisk(domain, k, today, overdueAmberDays, overdueRedDays);
-
-        // Missing-report flagging only applies to months strictly before the
-        // current month — a month that hasn't finished yet (or hasn't started)
-        // can't fairly be judged as "missing" reports.
-        const isPastMonth = k < thisMonthKey;
-        const missing = isPastMonth ? computeCellMissing(domain, k, val) : 0;
-        const isMissingFlagged = missing > 0;
-
-        // Missing reports (past months) and overdue-by-redDays both render as
-        // red fill; overdue-by-amberDays renders amber.
-        const riskClass = (risk === 'overdue' || isMissingFlagged) ? ' risk-overdue' : risk === 'near' ? ' risk-near' : '';
-        const missingFlag = isMissingFlagged ? `<span class="missing-flag" title="${missing} report(s) missing vs. Dim Table (past month)">&#9888;</span>` : '';
-        const titleAttr = isMissingFlagged ? ` title="${missing} report(s) missing vs. Dim Table (past month)"` : '';
-        rowHtml += `<td class="count-cell${riskClass}" data-domain="${encodeURIComponent(domain)}" data-month="${k}"${titleAttr}>${val}${missingFlag}</td>`;
-      } else {
-        rowHtml += '<td class="empty-cell">·</td>';
-      }
-    });
-    tr.innerHTML = rowHtml;
-    tbody.appendChild(tr);
-  });
-
-  // Total row
-  const totalTr = document.createElement('tr');
-  totalTr.className = 'total-row';
-  totalTr.innerHTML =
-    `<td class="domain-col">Total</td><td>${grandTotal}</td>` +
-    monthKeys.map((k) => `<td>${monthTotals[k] || ''}</td>`).join('');
-  tbody.appendChild(totalTr);
-
-  table.appendChild(tbody);
-  container.appendChild(table);
-
-  container.querySelectorAll('td.count-cell').forEach((cell) => {
-    cell.addEventListener('click', () => {
-      const domain = decodeURIComponent(cell.dataset.domain);
-      const month = cell.dataset.month;
-      showDrilldown(domain, month);
-    });
-  });
-}
-
-// Ranks a Fact Table row's Status by how far along the pipeline it is, so we
-// can pick the single furthest-along row per report for the drill-down table.
-// Tries the real GDM stage names first (DB Dev, PBI Dev, QA, DPO Approval,
-// RELEASED IN PROD); falls back to the lowercase STAGE_SEQUENCE for any
-// legacy/manual data that doesn't match those exact labels.
-function stageRank(status) {
-  const raw = (status || '').toString().trim();
-  const gdmIdx = GDM_STAGE_SEQUENCE.indexOf(raw);
-  if (gdmIdx !== -1) return gdmIdx;
-  const legacyIdx = STAGE_SEQUENCE.indexOf(raw.toLowerCase());
-  return legacyIdx;
-}
-
-function showDrilldown(domain, monthKey) {
-  const matches = factRows.filter((row) => {
-    if (row['Domain'] !== domain) return false;
-    return rowMonthKey(row) === monthKey;
-  });
-
-  // The drill-down table should show one row per report - its TRUE overall
-  // furthest stage, not just the furthest stage among rows that happen to
-  // land in THIS domain + month. A report's different stages can land in
-  // different months (e.g. PBI Dev done in May, QA/DPO Approval/RELEASED IN
-  // PROD all in June) - `matches` above only decides WHICH reports belong in
-  // this month's view; the row shown for each one is looked up across ALL of
-  // that report's factRows (still scoped to this domain), so a report that's
-  // since shipped shows "RELEASED IN PROD" even when viewed from an earlier
-  // month it also had activity in, rather than showing whatever earlier
-  // stage happened to fall in that specific month.
-  const latestRows = collapsedReportRows(domain, monthKey);
-
-  // foundCount is the number of DISTINCT reports among the matches, not the
-  // number of stage-rows - a report can appear more than once here (one row
-  // per stage it has reached that happens to land in this month), and that
-  // must still only count once against the Dim Table's Expected Report Count.
-  const expectedCount = (domainCounts[domain] && domainCounts[domain][monthKey]) || 0;
-  const foundCount = new Set(matches.map((row) => row['Report Name']).filter(Boolean)).size;
-  const missingCount = Math.max(expectedCount - foundCount, 0);
-  const extraCount = Math.max(foundCount - expectedCount, 0);
-
-  let titleText = `${domain} — ${monthLabels[monthKey]}: ${foundCount} of ${expectedCount} expected report${expectedCount === 1 ? '' : 's'} found`;
-  if (missingCount > 0) {
-    titleText += ` (${missingCount} missing)`;
-  } else if (extraCount > 0) {
-    titleText += ` (${extraCount} more than expected)`;
-  } else {
-    titleText += ' (all accounted for)';
-  }
-
-  const title = document.getElementById('drilldownTitle');
-  title.textContent = titleText;
-
-  const today = startOfToday();
-
-  const tbody = document.getElementById('drilldownTbody');
-  tbody.innerHTML = '';
-  latestRows.forEach((row) => {
-    const tr = document.createElement('tr');
-    const fmt = (d) => (d instanceof Date && !isNaN(d) ? d.toLocaleDateString() : (d || ''));
-    const risk = classifyRisk(row, today);
-    tr.innerHTML = `
-      <td>${row['Report Name'] || ''}</td>
-      <td>${row['PO'] || ''}</td>
-      <td><span class="badge">${(row['Status'] || '').trim() || '—'}</span></td>
-      <td>${fmt(row['Status Start Date'])}</td>
-      <td>${fmt(row['Expected Release Date'])}</td>
-      <td>${risk.level === 'blocked' ? '<span style="opacity:.7">\u2014 (to redo)</span>' : fmt(row['Actual Release Date'])}</td>
-      <td>${riskBadgeHtml(risk)}</td>
-      <td>${row['DB Developers '] ?? row['DB Developers'] ?? ''}</td>
-      <td>${row['PBI Developers'] || ''}</td>
-      <td>${row['Schema'] || ''}</td>
-    `;
-    tbody.appendChild(tr);
-  });
-
-  document.getElementById('drilldownContainer').style.display = 'block';
-  document.getElementById('drilldownContainer').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-
-  // Sync "Reports coming your way" to the same month that was just clicked on
-  // the timeline chart, so both views stay in context together.
-  const monthFilterSelect = document.getElementById('upcomingMonthFilter');
-  if (monthFilterSelect) {
-    monthFilterSelect.value = monthKey;
-    if (factRows.length) renderUpcomingForPO();
-  }
-}
-
-document.getElementById('closeDrilldownBtn').addEventListener('click', () => {
-  document.getElementById('drilldownContainer').style.display = 'none';
-});
-
-// ---------------------------------------------------------------------------
-// "Reports coming your way" — QA-Tester-facing view: Status = DB Dev or PBI Dev, releasing soon
-// ---------------------------------------------------------------------------
-
-function populateUpcomingPoFilter(rows) {
-  const select = document.getElementById('upcomingPoFilter');
-  const current = select.value;
-  const pos = Array.from(new Set(rows.map((r) => (r['PO'] || '').toString().trim()).filter(Boolean))).sort();
-  select.innerHTML = '<option value="">All QA Testers</option>' + pos.map((po) => `<option value="${po}">${po}</option>`).join('');
-  if (pos.includes(current)) select.value = current;
-}
-
-// Populated from the full set of months present in the Dim Table (same
-// monthKeys/monthLabels the timeline chart uses), not just months that have
-// upcoming rows — so clicking any chart cell always has a matching option.
-function populateUpcomingMonthFilter() {
-  const select = document.getElementById('upcomingMonthFilter');
-  const current = select.value;
-  select.innerHTML = '<option value="">All months</option>' +
-    monthKeys.map((k) => `<option value="${k}">${monthLabels[k]}</option>`).join('');
-  if (monthKeys.includes(current)) select.value = current;
-}
-
-function renderUpcomingForPO() {
-  const today = startOfToday();
-  const upcomingDays = getUpcomingDays();
-
-  const cutoff = new Date(today);
-  cutoff.setDate(cutoff.getDate() + upcomingDays);
-
-  // A report can have several stage-rows in factRows at once (one per stage
-  // it has reached), so a report that's already shipped still has its own
-  // old DB Dev/PBI Dev rows sitting around from earlier in its history.
-  // Those must NOT show up here just because their (long-past) Expected
-  // Release Date happens to fall inside the window - a report only belongs
-  // in "coming your way" if it hasn't shipped yet.
-  const shippedReportNames = new Set(
-    factRows.filter((row) => row['Status'] === 'RELEASED IN PROD').map((row) => row['Report Name'])
-  );
-
-  // This table exists to tell QA testers when a report is landing in QA, so
-  // its Status Start / Expected Release / Days Until Release columns should
-  // reflect the QA stage's own dates - not just whichever DB Dev/PBI Dev
-  // stage-row happens to be kept for display. If Current Status has already
-  // advanced this report to QA or beyond, it has its own QA stage-row in
-  // factRows; look those up per report (scoped to domain, in case the same
-  // report name exists in more than one domain) so they can be substituted
-  // in below. Falls back to the DB Dev/PBI Dev row's own dates when no QA
-  // row exists yet (the report genuinely hasn't reached QA).
-  const qaRowByReport = new Map();
-  factRows.forEach((r) => {
-    if (r['Status'] === 'QA') qaRowByReport.set(`${r['Domain']}||${r['Report Name']}`, r);
-  });
-
-  const upcomingRaw = factRows.filter((row) => {
-    const status = (row['Status'] || '').trim().toLowerCase();
-    if (status !== 'db dev' && status !== 'pbi dev') return false;
-    if (shippedReportNames.has(row['Report Name'])) return false; // already shipped - exclude entirely
-    const expected = row['Expected Release Date'];
-    if (!(expected instanceof Date) || isNaN(expected)) return false;
-    return expected <= cutoff; // includes anything already overdue too
-  });
-
-  // A report currently in PBI Dev still has its earlier (already-completed)
-  // DB Dev stage-row sitting in factRows too, since Current Status = PBI Dev
-  // means BOTH stages have been emitted. If both rows' Expected Release
-  // Dates happen to fall inside the window, the report would otherwise show
-  // up twice. Keep only the single furthest-along stage-row per report name.
-  const latestByReportName = new Map();
-  upcomingRaw.forEach((row) => {
-    const name = row['Report Name'];
-    const existing = latestByReportName.get(name);
-    if (!existing || stageRank(row['Status']) >= stageRank(existing['Status'])) {
-      latestByReportName.set(name, row);
-    }
-  });
-  const upcomingAll = Array.from(latestByReportName.values()).map((row) => {
-    const qaRow = qaRowByReport.get(`${row['Domain']}||${row['Report Name']}`);
-    return {
-      ...row,
-      '_displayStatusStart': qaRow ? qaRow['Status Start Date'] : row['Status Start Date'],
-      '_displayExpectedRelease': qaRow ? qaRow['Expected Release Date'] : row['Expected Release Date'],
-      '_displayActualRelease': qaRow ? qaRow['Actual Release Date'] : row['Actual Release Date'],
-    };
-  });
-
-  populateUpcomingPoFilter(upcomingAll);
-  populateUpcomingMonthFilter();
-  const poFilterValue = document.getElementById('upcomingPoFilter').value;
-  const monthFilterValue = document.getElementById('upcomingMonthFilter').value;
-  let upcoming = upcomingAll;
-  if (poFilterValue) {
-    upcoming = upcoming.filter((row) => (row['PO'] || '').toString().trim() === poFilterValue);
-  }
-  if (monthFilterValue) {
-    // Group by the same rule the heatmap/drill-down use (Plan Delivery
-    // Month takes priority over any individual stage's Expected Release
-    // Date - see rowMonthKey) so clicking a heatmap cell, or picking a month
-    // here directly, shows the same reports the drill-down would for that
-    // cell. Without this, a report could be bucketed under a different
-    // month here (based on its QA Expected Completion Date) than where the
-    // heatmap/drill-down place it (based on Plan Delivery Month).
-    upcoming = upcoming.filter((row) => rowMonthKey(row) === monthFilterValue);
-  }
-
-  const sortKey = (row) => {
-    const d = row['_displayExpectedRelease'];
-    return d instanceof Date && !isNaN(d) ? d.getTime() : Infinity;
+    B.coming.sort((a,b)=>a.s.est-b.s.est); B.due.sort((a,b)=>a.s.est-b.s.est);
+    B.actions=B.sent.length+B.retest.length+B.overdue.length+B.missing.length;
+    B.dueWeek=B.due.filter(x=>days(T,x.s.est)<7).length+B.overdue.length;
+    return B;
   };
-  upcoming.sort((a, b) => sortKey(a) - sortKey(b));
+  // ---- original Migration Timeline: Dim Table targets + risk coloring ----
+  // A report lives in ONE month bucket for its whole lifecycle: Plan Delivery
+  // Date's month, falling back to its Base finish month.
+  M.bucketOf=r=>monKey(r.planDate||r.baseFinish);
+  M.dim=data.dim||[];
+  M.dimDomains=[...new Set(M.dim.map(d=>d.domain))];
+  M.dimMonths=[...new Set(M.dim.map(d=>d.mk))].sort();
+  M.target=(dom,mk)=>M.dim.filter(d=>d.domain===dom&&d.mk===mk).reduce((a,d)=>a+d.count,0);
+  M.dimTotal=M.dim.reduce((a,d)=>a+d.count,0);
+  M.bucketReports=(dom,mk)=>reports.filter(r=>(dom==null||r.domain===dom)&&M.bucketOf(r)===mk);
+  // Worst risk among the tracked reports in a cell — the original rules,
+  // upgraded to the governing date (Reforecast where present, else Base).
+  M.cellRisk=(dom,mk,amberD,redD)=>{let worst=null;
+    M.bucketReports(dom,mk).forEach(r=>{
+      if(r.released)return;
+      if(r.blocked){ // judge blocked by rework truth: unclaimed or broken promise -> red
+        const open=(M.rwByReport[r.name]||[]).filter(w=>!w.resolved);
+        if(!open.length||open.some(w=>!w.expFix||w.expFix<T))worst='overdue';
+        return;}
+      const g=r.curStage&&r.curStage.est?r.curStage.est:r.baseFinish;
+      if(!g)return; const n=days(g,T); if(n<=0)return;
+      if(n>=redD)worst='overdue'; else if(n>=amberD&&worst!=='overdue')worst='near';});
+    return worst;};
+  M.cellMissing=(dom,mk)=>Math.max(M.target(dom,mk)-new Set(M.bucketReports(dom,mk).map(r=>r.name)).size,0);
+  // heatmap + burnup: planned (Base) vs released (actual) per month
+  const months=new Set();
+  reports.forEach(r=>{if(r.baseFinish)months.add(monKey(r.baseFinish)); if(r.releaseDate)months.add(monKey(r.releaseDate));});
+  M.months=[...months].filter(Boolean).sort();
+  M.domains=[...new Set(reports.map(r=>r.domain||'—'))].sort();
+  M.cell=(dom,mk)=>{const p=reports.filter(r=>(r.domain||'—')===dom&&monKey(r.baseFinish)===mk).length;
+    const a=reports.filter(r=>(r.domain||'—')===dom&&r.releaseDate&&monKey(r.releaseDate)===mk).length;return{p,a};};
+  M.burnup=M.months.map(mk=>({mk,
+    p:reports.filter(r=>r.baseFinish&&monKey(r.baseFinish)<=mk).length,
+    a:reports.filter(r=>r.releaseDate&&monKey(r.releaseDate)<=mk).length}));
+  // data issues (friendly)
+  M.dq=[];
+  data.missingCols.forEach(c=>M.dq.push({sev:'red',txt:`Column "${c}" not found in Combined Delivery Data — everything depending on it is blank here.`,act:'Check the header spelling in the tracker'}));
+  unrel.forEach(r=>{
+    if(r.curStage&&!r.curStage.owner)M.dq.push({sev:'amber',txt:`${r.name} is in ${r.curStage.key} with no ${STAGES[r.curIdx-1].owner} named.`,act:'Assign an owner'});
+    if(r.blocked&&!(M.rwByReport[r.name]||[]).length)M.dq.push({sev:'amber',txt:`${r.name} is marked Blocked but has no Rework Log row.`,act:'Log the send-back'});
+  });
+  M.unclaimed.forEach(w=>M.dq.push({sev:'amber',txt:`${w.name} was sent back to ${w.to}${w.sent?' on '+fmtD(w.sent):''} and nobody has committed a fix date.`,act:'Enter an Expected Fix Date'}));
+  if(M.undated)M.dq.push({sev:'dim',txt:`${M.undated} not-started report${M.undated>1?'s':''} have no dates at all — excluded from the projected finish.`,act:'Add baseline dates when planned'});
+  const nameCount={}; reports.forEach(r=>{nameCount[r.name]=(nameCount[r.name]||0)+1;});
+  Object.entries(nameCount).filter(([,c])=>c>1).forEach(([n,c])=>M.dq.push({sev:'red',txt:`"${n}" appears ${c} times in Combined Delivery Data.`,act:'De-duplicate the report rows'}));
+  data.issues.forEach(t=>M.dq.push({sev:'red',txt:t,act:''}));
+  return M;
+}
+/*__DATA_LAYER_END__*/
+</script>
+<script>
+/* ============================== render layer ============================== */
+let DATA=null, MODEL=null, VIEW='q1', PERSON='', PERSON2='', DRILL=null;
+let HORIZON={mode:'days',days:14};
+const $=s=>document.querySelector(s);
+const el=(t,c,h)=>{const e=document.createElement(t);if(c)e.className=c;if(h!=null)e.innerHTML=h;return e;};
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
+const srcOf=s=>s&&s.re&&(!s.base||s.re>=s.base)?'Reforecast':'Base'; // the LATER of the two is the due date
+function inWin(d){ if(!d)return false;
+  if(HORIZON.mode==='range')return (!HORIZON.from||d>=HORIZON.from)&&(!HORIZON.to||d<=HORIZON.to);
+  const n=days(MODEL.T,d);return n>=0&&n<HORIZON.days; }
+function winLabel(){return HORIZON.mode==='range'
+  ?`${fmtD(HORIZON.from)} – ${fmtD(HORIZON.to)}`:`next ${HORIZON.days} days`;}
+function windowCtl(){
+  const w=el('span');
+  w.innerHTML=`<span class="winbtns">${[7,14,30].map(d=>`<button data-w="${d}" class="${HORIZON.mode==='days'&&HORIZON.days===d?'on':''}">${d} days</button>`).join('')}<button data-w="c" class="${HORIZON.mode==='range'?'on':''}">custom</button></span>
+  <span id="rangeIn" style="${HORIZON.mode==='range'?'':'display:none'};margin-left:8px">
+    <input type="date" id="rFrom" value="${HORIZON.from?HORIZON.from.toISOString().slice(0,10):''}">
+    – <input type="date" id="rTo" value="${HORIZON.to?HORIZON.to.toISOString().slice(0,10):''}"></span>`;
+  w.querySelectorAll('[data-w]').forEach(b=>b.onclick=()=>{
+    if(b.dataset.w==='c'){HORIZON={mode:'range',from:MODEL.T,to:new Date(MODEL.T.getTime()+30*DAY)};}
+    else HORIZON={mode:'days',days:+b.dataset.w};
+    render();});
+  w.querySelectorAll('input[type=date]').forEach(i=>i.onchange=()=>{
+    const f=w.querySelector('#rFrom').value,t=w.querySelector('#rTo').value;
+    HORIZON={mode:'range',from:f?new Date(f+'T00:00'):null,to:t?new Date(t+'T00:00'):null};render();});
+  return w;
+}
+function twoClock(s){ // due date = the LATER of Baseline / Reforecast, named
+  if(!s||!s.est)return '<span class="two-clock"><span class="est">no date</span></span>';
+  const src=srcOf(s), other=src==='Reforecast'?s.base:s.re;
+  const sub=other&&days(other,s.est)!==0?`<span class="base">${src==='Reforecast'?'base':'reforecast'} ${fmtD(other)}${src==='Reforecast'&&s.slip>0?` <span class="slip">(+${s.slip}d)</span>`:''}</span>`:'';
+  return `<span class="two-clock"><span class="est">${fmtD(s.est)} · ${src}</span>${sub}</span>`;
+}
+function dueChip(s){ if(!s||!s.est)return '';
+  const src=srcOf(s), n=days(MODEL.T,s.est);
+  if(n<0)return `<span class="chip ${n<-3?'red':'amber'}">${n<-3?'⏰':'🟠'} ${-n}d late · ${src}</span>`;
+  if(n<=3)return `<span class="chip amber">🟠 due in ${n}d · ${src}</span>`;
+  return `<span class="chip blue">🔵 in ${n}d · ${src}</span>`;
+}
 
-  const tbody = document.getElementById('upcomingTbody');
-  tbody.innerHTML = '';
-  const fmt = (d) => (d instanceof Date && !isNaN(d) ? d.toLocaleDateString() : (d || ''));
-
-  upcoming.forEach((row) => {
-    const tr = document.createElement('tr');
-    const expected = row['_displayExpectedRelease'];
-    const actual = row['_displayActualRelease'];
-    // Every row in this table is a report "coming your way" to QA - that's
-    // the whole premise of the table - so both the Stage badge and the
-    // Status risk badge are evaluated as that report's QA stage, using the
-    // QA dates already resolved above (or their DB Dev/PBI Dev fallback),
-    // not the underlying kept row's own DB Dev/PBI Dev stage name and dates.
-    const risk0 = classifyRisk({ 'Status': 'QA', 'Expected Release Date': expected, 'Actual Release Date': actual, 'Blocked': row['Blocked'], 'BlockedReturnTo': row['BlockedReturnTo'] }, today);
-    let risk = risk0;
-    const alreadyReleased = actual instanceof Date && !isNaN(actual);
-    const daysUntil = expected instanceof Date && !isNaN(expected) ? daysBetween(today, expected) : '';
-    let daysCell;
-    if (alreadyReleased) {
-      daysCell = `Completed ${fmt(actual)}`;
-    } else if (daysUntil === '') {
-      daysCell = '';
-    } else if (daysUntil < 0) {
-      daysCell = `${Math.abs(daysUntil)}d overdue`;
-    } else {
-      daysCell = `${daysUntil}d`;
+/* ---------- Question 1 ---------- */
+function renderQ1(v){
+  v.append(dimTimeline());   // the start — and the source of truth for "how late"
+  outlookPanel(v);           // what's coming, filterable
+  reworksPanel(v);           // last table on the page
+}
+function stageReason(r){
+  if(r.blocked)return{k:'blocked',t:`⛔ Blocked — ${r.blockTarget} must fix`};
+  if((MODEL.rwByReport[r.name]||[]).some(w=>!w.resolved))return{k:'rework',t:'🔁 Open rework'};
+  const mx=Math.max(...r.stages.map(x=>x.slip));
+  if(mx>0)return{k:'slip',t:`Reforecast +${mx}d vs Baseline`};
+  return{k:'none',t:'No blocker / rework logged'};
+}
+function reworksPanel(v){
+  const M=MODEL,rw=el('div','panel');
+  rw.innerHTML=`<h3>Open reworks</h3><p class="sub">Sent back and not yet fixed. <b>Unclaimed</b> = no Expected Fix Date committed.</p>
+  <div class="mebar"><label>Person <select id="whoRw"><option value="">everyone</option>
+    ${M.people.map(pp=>`<option ${pp===PERSON2?'selected':''}>${esc(pp)}</option>`).join('')}</select></label></div>`;
+  rw.querySelector('#whoRw').onchange=e=>{PERSON2=e.target.value;render();};
+  const involves=w=>{const rec=DATA.reports.find(x=>x.name===w.name);
+    return !PERSON2||!rec||rec.stages.some(st=>st.owner===PERSON2);};
+  const rwItems=M.openReworks.filter(involves);
+  if(!rwItems.length)rw.append(el('div','empty','No open reworks.'));
+  else{const t=el('table');t.innerHTML=`<thead><tr><th>Report</th><th>Sent back</th><th>By</th><th>To fix</th><th>Status</th><th>Why</th></tr></thead>`;
+    const bd=el('tbody');
+    rwItems.forEach(w=>{const tr=el('tr','rowlink');tr.tabIndex=0;
+      const st=!w.expFix?`<span class="chip amber">⚠️ Unclaimed${w.sent?' '+days(w.sent,M.T)+'d':''}</span>`
+        :w.expFix<M.T?`<span class="chip red">⏰ Fix ${days(w.expFix,M.T)}d late</span>`
+        :`<span class="chip blue">🔵 fix due ${fmtD(w.expFix)}</span>`;
+      tr.innerHTML=`<td>${esc(w.name)}</td><td class="num">${fmtD(w.sent)}</td><td>${esc(w.by)}</td><td>${esc(w.to)}</td><td>${st}</td><td style="max-width:280px">${esc(w.why)}</td>`;
+      tr.onclick=()=>openReport(w.name);bd.append(tr);});
+    t.append(bd);rw.append(t);}
+  v.append(rw);
+}
+let OUTSTAGE='';
+function outlookPanel(v){
+  const M=MODEL,ol=el('div','panel');
+  ol.innerHTML=`<h3>Expected handoffs & releases — ${winLabel()}</h3>
+  <p class="sub">Dates are each stage's <b>Reforecast where one exists, otherwise Base</b> — the tag on every row says which.</p>`;
+  const bar=el('div','mebar');
+  bar.innerHTML=`<label>Handoff <select id="stagePair"><option value="">all stages</option>
+    ${['DB → PBI','PBI → QA','QA → DPO','Release'].map(o=>`<option ${o===OUTSTAGE?'selected':''}>${o}</option>`).join('')}</select></label>
+  <label>Person <select id="whoOl"><option value="">everyone</option>
+    ${M.people.map(pp=>`<option ${pp===PERSON2?'selected':''}>${esc(pp)}</option>`).join('')}</select></label>`;
+  bar.append(windowCtl());ol.append(bar);
+  bar.querySelector('#stagePair').onchange=e=>{OUTSTAGE=e.target.value;render();};
+  bar.querySelector('#whoOl').onchange=e=>{PERSON2=e.target.value;render();};
+  const evts=M.outlook.filter(x=>inWin(x.d)
+    &&(!OUTSTAGE||x.label===OUTSTAGE)
+    &&(!PERSON2||x.stage.owner===PERSON2||x.r.stages.some(st=>st.owner===PERSON2)));
+  const grid=el('div','outlook');
+  const buckets=HORIZON.mode==='days'&&HORIZON.days<=14
+    ?[['This week',x=>days(M.T,x.d)<7],['Next week',x=>days(M.T,x.d)>=7]]
+    :[['Earlier',(x,i)=>i<Math.ceil(evts.length/2)],['Later',(x,i)=>i>=Math.ceil(evts.length/2)]];
+  buckets.forEach(([lbl,f])=>{
+    const c=el('div');c.innerHTML=`<p class="eyebrow">${lbl}</p>`;
+    const items=evts.filter(f);
+    if(!items.length)c.append(el('div','empty','Nothing scheduled.'));
+    items.forEach(x=>{const d=el('div','ol-item');
+      const src=srcOf(x.stage);
+      const lateTag=x.d<M.T?` <span class="chip red">⏰ ${days(x.d,M.T)}d late</span>`:'';
+      d.innerHTML=`<span class="d">${fmtD(x.d)}</span><span class="chip ${x.label==='Release'?'green':'blue'}">${x.label==='Release'?'🟢':'🔵'} ${x.label}</span><span style="cursor:pointer;flex:1">${esc(x.r.name)}</span><span class="chip ${src==='Reforecast'?'amber':'outline'}" title="${src==='Reforecast'?'base '+fmtD(x.stage.base):'no reforecast — this is the baseline'}">${src}</span>${lateTag}`;
+      d.querySelector('span[style*=pointer]').onclick=()=>openReport(x.r.name);c.append(d);});
+    grid.append(c);});
+  ol.append(grid);v.append(ol);
+}
+let TH={amber:2,red:10};
+function dimTimeline(){
+  const M=MODEL,p=el('div','panel');
+  if(!M.dim.length){p.innerHTML='<h3>Migration timeline</h3><div class="empty">Dim Table sheet is empty or missing.</div>';return p;}
+  const grandLbl=`${DATA.reports.filter(r=>r.released).length}/${M.dimTotal} released`;
+  p.innerHTML=`<h3>Migration timeline — released / target by Data Product <span class="num" style="font-size:13px;color:var(--muted);font-weight:400;margin-left:10px">${grandLbl}</span></h3>
+  <div class="mebar" style="margin-bottom:10px">
+    <span class="tsub"><b style="color:var(--text)">cell = released / target</b> · future months show the target only</span>
+    <label class="tsub">overdue ≥ <input type="number" id="thAmber" value="${TH.amber}" min="1" style="width:52px"> days → amber</label>
+    <label class="tsub">overdue ≥ <input type="number" id="thRed" value="${TH.red}" min="1" style="width:52px"> days → red</label>
+    <span class="tsub"><span class="sw swg"></span>All RELEASED IN PROD (target met)</span>
+    <span class="tsub"><span class="sw swb"></span>On track</span>
+    <span class="tsub"><span class="sw swa"></span>Overdue ≥ amber days</span>
+    <span class="tsub"><span class="sw swr"></span>Overdue ≥ red days</span>
+    <span class="tsub"><span class="missf">⚠</span> Missing vs target, past months only</span>
+    <span class="tsub"><b style="color:var(--text)">Latest date past Baseline</b> = the latest date entered (Actual / Reforecast / Baseline) after the plan — always findable in the tracker</span>
+  </div>`;
+  const thisMk=monKey(M.T);
+  const wrap=el('div','hm'),tb=el('table','tl');
+  tb.innerHTML=`<thead><tr><th class="rowh">Data Product</th>${M.dimMonths.map(mk=>`<th class="${mk===thisMk?'nowcol':''}">${monLbl(mk)}${mk===thisMk?'<span style="display:block;font-size:9px;font-weight:400">today</span>':''}</th>`).join('')}<th title="The latest date entered (Actual / Reforecast / Baseline) after the Baseline — always findable in the tracker">Latest date past Baseline</th></tr></thead>`;
+  const bd=el('tbody');const monthTot={},monthRel={};let grand=0,grandRel=0;
+  M.dimDomains.forEach(dom=>{
+    const tr=el('tr');let rowTot=0,rowRel=0,html='';
+    M.dimMonths.forEach(mk=>{
+      const val=M.target(dom,mk);
+      if(!val){html+='<td class="tcell empty">·</td>';return;}
+      const rel=M.bucketReports(dom,mk).filter(r=>r.released).length;
+      rowTot+=val;rowRel+=rel;monthTot[mk]=(monthTot[mk]||0)+val;monthRel[mk]=(monthRel[mk]||0)+rel;
+      const fut=mk>thisMk;
+      const risk=M.cellRisk(dom,mk,TH.amber,TH.red);
+      const missing=mk<thisMk?M.cellMissing(dom,mk):0;
+      const cls=(risk==='overdue'||missing)?'tred':risk==='near'?'tamber':(rel>=val?'tmet':'tblue');
+      const sel=DRILL&&DRILL.type==='dim'&&DRILL.dom===dom&&DRILL.mk===mk?' sel':'';
+      const tip=missing?` title="${missing} report(s) missing vs. Dim Table (past month)"`:'';
+      const txt=fut&&!rel?String(val):`${rel}/${val}`;
+      html+=`<td class="tcell ${cls}${sel}" tabindex="0" data-dom="${esc(dom)}" data-mk="${mk}"${tip}>${txt}${missing?'<span class="missf">⚠</span>':''}</td>`;});
+    grand+=rowTot;grandRel+=rowRel;
+    const domReports=DATA.reports.filter(r=>r.domain===dom);
+    const unrelD=domReports.filter(r=>!r.released);
+    const estDriver=unrelD.reduce((m,r)=>r.estFinish&&(!m||r.estFinish>m.estFinish)?r:m,null);
+    const shorten2=x=>x?x.replace('DPO Approval','DPO').replace('PBI Dev','PBI').replace('DB Dev','DB'):'';
+    let merged;
+    if(!domReports.length)
+      merged=`<span style="color:var(--dim)">—</span>`;
+    else if(!unrelD.length){const dd=domReports.filter(r=>r.releaseDate).reduce((m,r)=>!m||r.releaseDate>m?r.releaseDate:m,null);
+      merged=`<span style="color:var(--green)">Done${dd?' '+fmtD(dd):''}</span>`;}
+    else{
+      const firstOpenMk=M.dimMonths.find(mk=>M.target(dom,mk)&&M.bucketReports(dom,mk).some(r=>!r.released));
+      const bu=firstOpenMk?M.bucketReports(dom,firstOpenMk).filter(r=>!r.released&&r.estFinish):[];
+      const mdrv=bu.length?bu.reduce((m,r)=>r.estFinish>m.estFinish?r:m):null;
+      if(mdrv){
+        merged=`<span style="color:var(--muted);font-size:11px">${monLbl(firstOpenMk)}</span> → <span class="num estdrv" data-drv="${esc(mdrv.name)}" title="${monLbl(firstOpenMk)} delivery — latest entered date past Baseline, on ${esc(mdrv.name)} (now in ${esc(mdrv.status)}${mdrv.blocked?', blocked':''}). Click to open it and find it on the ${esc(mdrv.estFinishSrc||'')} cell." style="cursor:pointer;text-decoration:underline dotted">${fmtD(mdrv.estFinish)}</span>
+        <div style="margin-top:4px;color:var(--dim);font-size:11px">${esc(mdrv.estShort||'')} ${fmtD(mdrv.estFinish)} · now ${esc(mdrv.status)}${mdrv.blocked?' ⛔':''}</div>`;
+      }else merged=`— <div style="margin-top:4px;color:var(--dim);font-size:11px">nothing entered past Baseline</div>`;
     }
-    // Blocked rows never show a main-tab completion date - the Rework Log is
-    // the only source of truth for them. Logged: promise / UNCLAIMED / fixed.
-    // Not logged: dashes + a red chip, never a stale "Completed" date.
-    let expectedCell = fmt(expected);
-    let whyCell = '';
-    const att = risk0.level === 'blocked' ? newestOpenAttempt(row['Report Name']) : null;
-    if (risk0.level === 'blocked' && !att) {
-      expectedCell = '\u2014';
-      daysCell = '\u2014';
-      whyCell = '<span class="risk-badge overdue">Not logged on Rework Log</span>';
-    }
-    if (att) {
-      const promise = att['Expected Fix Date'] instanceof Date ? att['Expected Fix Date'] : null;
-      const fixedD = att['Date Fixed'] instanceof Date ? att['Date Fixed'] : null;
-      const attempts = attemptCountFor(row['Report Name']);
-      const reason = String((fixedD ? (att['What Was Fixed'] || att['What Was Wrong']) : att['What Was Wrong']) || '');
-      const trunc = reason.length > 70 ? reason.slice(0, 67) + '…' : reason;
-      const chip = attempts > 1 ? `<span class="risk-badge rework" style="margin-right:6px;">Attempt ${attempts}</span>` : '';
-      whyCell = `${chip}<span title="${escapeHtml(reason)}">${escapeHtml(trunc)}</span>`;
-      if (fixedD) {
-        expectedCell = `${fmt(fixedD)} <span style="opacity:.7">(fixed)</span>`;
-        const ago = daysBetween(fixedD, today);
-        daysCell = `Fixed ${ago}d ago — re-test: ${escapeHtml(att['Sent Back By'] || 'sender')}`;
-        // classifyRisk already labels this 'Fixed - awaiting re-test'
-      } else if (promise) {
-        expectedCell = `${fmt(promise)} <span style="opacity:.7">(fix promise)</span>`;
-        const d = daysBetween(today, promise);
-        daysCell = d < 0 ? `${Math.abs(d)}d overdue (promise)` : `${d}d (promise)`;
-      } else {
-        expectedCell = `<span class="risk-badge overdue">UNCLAIMED</span>`;
-        const team = att['To Stage'] || row['BlockedReturnTo'] || '';
-        daysCell = `Waiting on ${escapeHtml(team ? team + ' team' : 'a fixer')} (unclaimed)`;
-      }
-    }
-    tr.innerHTML = `
-      <td>${row['PO'] || ''}</td>
-      <td>${row['Report Name'] || ''}</td>
-      <td>${row['Domain'] || ''}</td>
-      <td><span class="badge">${(row['Status'] || 'QA').trim()}</span></td>
-      <td>${fmt(row['_displayStatusStart'])}</td>
-      <td>${expectedCell}</td>
-      <td>${daysCell}</td>
-      <td>${riskBadgeHtml(risk)}</td>
-      <td>${whyCell}</td>
-      <td>${row['DB Developers '] ?? row['DB Developers'] ?? ''}</td>
-      <td>${row['PBI Developers'] || ''}</td>
-      <td>${row['Schema'] || ''}</td>
-    `;
-    tbody.appendChild(tr);
-  });
+    tr.innerHTML=`<td class="rowh">${esc(dom)}</td>`+html
+      +`<td class="tcell" style="background:#152238;color:var(--text);text-align:left">${merged}</td>`;bd.append(tr);});
+  tb.append(bd);wrap.append(tb);p.append(wrap);
+  bd.querySelectorAll('td.tcell[data-mk]').forEach(td=>{
+    const open=()=>{DRILL={type:'dim',dom:td.dataset.dom,mk:td.dataset.mk};render();
+      setTimeout(()=>$('#drill')?.scrollIntoView?.({block:'nearest'}),0);};
+    td.onclick=open;td.onkeydown=e=>{if(e.key==='Enter')open();};});
+  bd.querySelectorAll('.estdrv[data-drv]').forEach(x=>x.onclick=e=>{e.stopPropagation();openReport(x.dataset.drv);});
+  p.querySelector('#thAmber').onchange=e=>{TH.amber=Math.max(1,+e.target.value||2);render();};
+  p.querySelector('#thRed').onchange=e=>{TH.red=Math.max(1,+e.target.value||10);render();};
+  if(DRILL&&(DRILL.type==='dim'||DRILL.type==='dom'))p.append(drilldownPanel());
+  return p;
+}
+function drilldownPanel(){
+  const M=MODEL,{dom,mk,type}=DRILL;
+  const items=type==='dom'
+    ?DATA.reports.filter(r=>r.domain===dom&&!r.released&&(()=>{const g=r.curStage&&r.curStage.est?r.curStage.est:r.baseFinish;return g&&g<M.T;})())
+    :type==='dim'
+    ?M.bucketReports(dom,mk)
+    :DATA.reports.filter(r=>(dom==null||(r.domain||'—')===dom)&&(monKey(r.baseFinish)===mk||(r.releaseDate&&monKey(r.releaseDate)===mk)));
+  const tgt=type==='dim'?M.target(dom,mk):null;
+  const miss=type==='dim'&&mk<monKey(M.T)?M.cellMissing(dom,mk):0;
+  const p=el('div','panel');p.id='drill';
+  p.innerHTML=`<button class="mclose" aria-label="Close drilldown">×</button><h3>${dom==null?'All domains':esc(dom)}${type==='dom'?'':' · '+monLbl(mk)} <span class="cnt" style="font-family:var(--mono);font-size:12px;color:var(--muted)">${type==='dom'?`${items.length} overdue`:tgt!=null?`target ${tgt} · ${items.filter(r=>r.released).length} released · ${items.length} tracked${miss?` · <span style=\"color:var(--red)\">${miss} missing</span>`:''}`:items.length+' report'+(items.length===1?'':'s')}</span></h3>
+  ${(()=>{if(type!=='dim'&&type!=='dom')return '';
+    const unrel=items.filter(r=>!r.released);
+    if(!unrel.length)return '';
+    const dated=unrel.filter(r=>r.estFinish);
+    let inner;
+    if(dated.length){const drv=dated.reduce((m,r)=>r.estFinish>m.estFinish?r:m);
+      inner=`<b>${type==='dom'?`${esc(dom)} — latest date entered past Baseline`:`This delivery — latest date entered past Baseline`}:</b> <span class="num">${fmtD(drv.estFinish)}</span> (${esc(drv.estShort)}) — on ${esc(drv.name)} · <b>now in ${esc(drv.status)}</b>${drv.blocked?' ⛔':''}`;}
+    else{inner=`<b>Est. completion:</b> nothing entered past Baseline yet.`;}
+    return `<div style="margin:8px 0 4px;background:var(--amber-bg);color:var(--amber);border-radius:8px;padding:7px 11px;font-size:12.5px">${inner}</div>`;})()}
+  <p class="sub">${type==='dim'?'<b>Current stage due</b> = the later of the stage\'s Baseline and Reforecast Completion Dates. <b>Days overdue</b> = days past the Current stage due (the later of Baseline / Reforecast) shown to its left — nothing else. <b>Final completion</b> = the Baseline, and under it the latest date entered after it — named by its tracker cell (Actual / Reforecast / Baseline). 💬 = Comments column.':'Reports planned (Base) for this month, plus any actually released in it.'}</p>`;
+  p.querySelector('.mclose').onclick=()=>{DRILL=null;render();};
+  const cmts=items.filter(r=>r.comments);
+  const cntEl=p.querySelector('h3 .cnt');
+  if(cntEl&&cmts.length)cntEl.insertAdjacentHTML('beforeend',` · 💬 ${cmts.length}`);
+  if(cmts.length){const dg=el('details');
+    dg.innerHTML=`<summary style="cursor:pointer;color:var(--muted);font-size:12.5px;margin:2px 0 8px">💬 Comments in this list — ${cmts.length} report${cmts.length===1?'':'s'}, grouped by Current Status (the "why" in the team\'s own words)</summary>`;
+    ORDER.forEach(stg=>{const grp=cmts.filter(r=>r.status===stg); if(!grp.length)return;
+      dg.insertAdjacentHTML('beforeend',`<p class="eyebrow" style="margin:10px 0 2px">${esc(stg)} · ${grp.length}</p>`);
+      grp.forEach(r=>dg.insertAdjacentHTML('beforeend',
+        `<div class="ol-item" style="align-items:flex-start"><span style="flex:0 0 220px;font-size:12px">${esc(r.name)}</span><span style="color:var(--muted);font-size:12px">${esc(r.comments)}</span></div>`));});
+    p.append(dg);}
+  const t=el('table');t.innerHTML=`<thead><tr><th>Report</th><th>Current Status</th><th>Current stage due</th><th>Days overdue<span style="display:block;font-size:9px;font-weight:400;text-transform:none;letter-spacing:0">the later of Baseline / Reforecast</span></th><th>Final completion — Baseline · latest entered</th><th>Assigned to</th></tr></thead>`;
+  const bd=el('tbody');
+  const lateOf=r=>{if(r.released)return null;const g=r.curStage&&r.curStage.est?r.curStage.est:r.baseFinish;
+    return g&&g<MODEL.T?{d:days(g,MODEL.T),src:r.curStage?srcOf(r.curStage):'Base'}:null;};
+  items.sort((a,b)=>((lateOf(b)?.d)||0)-((lateOf(a)?.d)||0)||((a.baseFinish||0)-(b.baseFinish||0))).forEach(r=>{
+    const tr=el('tr','rowlink');tr.tabIndex=0;
+    const next=r.released?`<span class="chip green">🟢 Released ${fmtD(r.releaseDate)}</span>`
+      :r.curStage&&r.curStage.est?`<span class="num">${fmtD(r.curStage.est)} <span style="color:var(--dim)">(${srcOf(r.curStage)})</span></span>`
+      :r.curStage?'<span class="chip dim">no date</span>':'<span class="chip dim">not started</span>';
+    const lt=lateOf(r);
+    const openRw=(MODEL.rwByReport[r.name]||[]).some(w2=>!w2.resolved);
+    const badge=r.released?'':(r.blocked?`<span class="chip red">⛔ ${esc((r.blockedRaw||'Blocked').replace(/^yes\s*[–-]\s*/i,''))}</span>`:openRw?'<span class="chip purple">🔁 Open rework</span>':'');
+    const clines=r.comments?String(r.comments).split(/\r?\n/).map(x=>x.trim()).filter(Boolean):[];
+    const cmt=clines.length?`<div style="color:var(--dim);font-size:11px;max-width:340px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(r.comments)}">💬 ${clines.length>1?'latest: ':''}${esc(clines[clines.length-1])}</div>`:'';
+    const sameDay=r.baseFinish&&r.estFinish&&days(r.baseFinish,r.estFinish)===0;
+    const fin=r.released?`<span class="chip green">🟢 ${fmtD(r.releaseDate)}</span>`
+      :`<span class="two-clock"><span class="est" title="${esc(r.baseFinishSrc||'')}">Baseline ${fmtD(r.baseFinish)}</span>${r.estFinish&&!sameDay?`<span class="base" title="${esc(r.estFinishSrc||'')}">${esc(r.estShort)} ${fmtD(r.estFinish)}</span>`:''}</span>`;
 
-  document.getElementById('upcomingTable').style.display = upcoming.length ? 'table' : 'none';
-  document.getElementById('upcomingEmpty').style.display = upcoming.length ? 'none' : 'block';
+    tr.innerHTML=`<td>${esc(r.name)}<div style="color:var(--dim);font-size:11px">${esc(r.domain)}${badge?' · ':''}${badge}</div>${cmt}</td>
+      <td>${esc(r.status)}</td>
+      <td>${next}</td>
+      <td class="num">${lt?`<span class="chip ${lt.d>3?'red':'amber'}">${lt.d>3?'⏰':'🟠'} ${lt.d}d</span>`:(r.released?'—':'<span class="chip green">on plan</span>')}</td>
+      <td>${fin}</td>
+      <td>${esc(r.curStage?r.curStage.owner:'')}</td>`;
+    tr.onclick=()=>openReport(r.name);tr.onkeydown=e=>{if(e.key==='Enter')openReport(r.name);};
+    bd.append(tr);});
+  t.append(bd);p.append(t);return p;
 }
 
-// ---------------------------------------------------------------------------
-// Stage progression gaps
-//
-// Rule (as described): a report's Actual Release Date on one stage means that
-// stage is complete and the report has moved into the next stage. There
-// should therefore be another record for the same Report Name whose Status
-// is the next stage in sequence, with a Status Start Date matching that
-// Actual Release Date. If no such record exists, flag it as a gap.
-// ---------------------------------------------------------------------------
-
-const STAGE_SEQUENCE = ['not started', 'db dev', 'pbi dev', 'qa', 'dpo approval', 'released in prod'];
-const STAGE_LABELS = {
-  'not started': 'Not Started',
-  'db dev': 'DB Dev',
-  'pbi dev': 'PBI Dev',
-  'qa': 'QA',
-  'dpo approval': 'DPO Approval',
-  'released in prod': 'RELEASED IN PROD',
-};
-
-function sameDay(a, b) {
-  return (
-    a instanceof Date && !isNaN(a) && b instanceof Date && !isNaN(b) &&
-    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
-  );
+/* ---------- Question 3 ---------- */
+function card(rec,ctx,action,status){
+  const c=el('div','card');c.tabIndex=0;
+  c.innerHTML=`<div class="rn">${esc(rec.name)}</div><div class="ctx">${ctx}</div>`+
+    (action?`<div class="act"><span class="alab">ACTION</span>${action}</div>`:'')+
+    (status?`<div class="st">${status}</div>`:'');
+  c.onclick=()=>openReport(rec.name);c.onkeydown=e=>{if(e.key==='Enter')openReport(rec.name);};
+  return c;
+}
+function section(v,icon,title,items,build){
+  const s=el('div','sect');
+  s.innerHTML=`<h4>${icon} ${title}<span class="cnt">${items.length}</span></h4>`;
+  if(!items.length){s.append(el('div','empty','Nothing here.'));v.append(s);return;}
+  const g=el('div','cards');items.forEach(x=>g.append(build(x)));s.append(g);v.append(s);
+}
+function renderQ3(v){
+  const M=MODEL;
+  const bar=el('div','mebar');
+  bar.innerHTML=`<label>I am <select id="who"><option value="">— pick your name —</option>
+    ${M.people.map(p=>`<option ${p===PERSON?'selected':''}>${esc(p)}</option>`).join('')}</select></label>`;
+  bar.append(windowCtl());
+  bar.insertAdjacentHTML('beforeend',`<span style="color:var(--dim);font-size:12px">share: <kbd>#person=${encodeURIComponent(PERSON||'…')}</kbd></span>`);
+  v.append(bar);
+  bar.querySelector('#who').onchange=e=>{PERSON=e.target.value;location.hash=PERSON?'#person='+encodeURIComponent(PERSON):'';render();};
+  if(!PERSON){v.append(el('div','empty','Pick a name to see a personal action list — works for DB Dev, PBI Dev, QA and DPO reviewers.'));return;}
+  const B=M.bucketsFor(PERSON,inWin);
+  v.append(el('p','mesummary',`You have <b>${B.actions}</b> action${B.actions===1?'':'s'} · <b>${B.dueWeek}</b> due this week · <b>${B.coming.length}</b> inbound in this window`));
+  section(v,'🔴','Sent back to you',B.sent,x=>card(x.rec,
+    `Sent back to ${esc(x.w.to)} by ${esc(x.w.by||'?')}${x.w.sent?' on '+fmtD(x.w.sent):''}${x.w.why?' — '+esc(x.w.why):''}`,
+    x.w.expFix?(x.lateFix?`Fix — promised ${fmtD(x.w.expFix)} has passed`:`Fix by your promised ${fmtD(x.w.expFix)}`):'Enter an expected fix date',
+    x.unclaimedD!=null?`<span class="chip amber">⚠️ Unclaimed for ${x.unclaimedD} day${x.unclaimedD===1?'':'s'}</span>`:
+      (x.lateFix?`<span class="chip red">⏰ ${x.lateFix}d past your fix date</span>`:'')));
+  section(v,'🔁','Waiting for your re-test',B.retest,x=>card(x.rec,
+    `Fix marked done${x.w.fixed?' on '+fmtD(x.w.fixed):''} by ${esc(x.w.to)} — originally sent back for: ${esc(x.w.why||'—')}`,
+    'Re-test and record the result',
+    x.sinceFix!=null?`<span class="chip purple">🔁 waiting ${x.sinceFix}d since fix</span>`:''));
+  section(v,'⏰','Your stage is overdue',B.overdue,x=>card(x.rec,
+    `${x.s.key} · ${twoClock(x.s)}`,
+    'Finish, or update your reforecast',
+    `<span class="chip ${x.lateD>3?'red':'amber'}">${x.lateD>3?'⏰':'🟠'} ${x.lateD}d past ${srcOf(x.s)}</span>`));
+  section(v,'🔵',`Due soon (${winLabel()})`,B.due,x=>card(x.rec,
+    `${x.s.key} · ${twoClock(x.s)}`,null,dueChip(x.s)));
+  section(v,'➡️','Coming your way',B.coming,x=>card(x.rec,
+    `In ${x.s.key} with ${esc(x.s.owner||'?')} · lands on you at their ${twoClock(x.s)}`,null,
+    x.overdue?`<span class="chip ${x.overdue>3?'red':'amber'}">${x.overdue>3?'⏰':'🟠'} handoff ${x.overdue}d late · ${srcOf(x.s)}</span>`:dueChip(x.s)));
+  section(v,'⛔','Blocked before you',B.blockedIn,x=>card(x.rec,
+    `Stuck in ${x.s.key} · ${esc(x.rec.blockedRaw)}`,null,
+    `<span class="chip red">⛔ ${esc(x.rec.blockTarget||'someone')} must fix</span>`));
+  section(v,'⚠️','Missing information',B.missing,x=>card(x.rec,esc(x.txt),esc(x.act),''));
 }
 
-function computeStageGaps() {
-  const byReport = new Map();
-  factRows.forEach((row) => {
-    const name = row['Report Name'];
-    if (!name) return;
-    if (!byReport.has(name)) byReport.set(name, []);
-    byReport.get(name).push(row);
-  });
-
-  const gaps = [];
-  byReport.forEach((records, reportName) => {
-    records.forEach((row) => {
-      // Blocked reports are excluded entirely - a completed stage with no
-      // next-stage record yet is expected while blocked (rework in
-      // progress, or stuck pending something else), not a data gap. This
-      // also covers the case where "Blocked - Needs Return To" caused a
-      // later stage-row (e.g. QA) to be intentionally dropped from the
-      // Fact Table - that's not a missing record either, it's the report
-      // correctly reverting to an earlier stage.
-      if (row['Blocked']) return;
-      const status = (row['Status'] || '').trim().toLowerCase();
-      const idx = STAGE_SEQUENCE.indexOf(status);
-      if (idx === -1 || idx === STAGE_SEQUENCE.length - 1) return; // unrecognized or already final stage
-      const actual = row['Actual Release Date'];
-      if (!(actual instanceof Date) || isNaN(actual)) return; // stage not completed yet, nothing to check
-
-      const nextStage = STAGE_SEQUENCE[idx + 1];
-      const hasMatch = records.some((r2) => {
-        const s2 = (r2['Status'] || '').trim().toLowerCase();
-        return s2 === nextStage && sameDay(r2['Status Start Date'], actual);
-      });
-
-      if (!hasMatch) {
-        gaps.push({
-          reportName,
-          domain: row['Domain'] || '',
-          po: row['PO'] || '',
-          completedStage: row['Status'],
-          completedOn: actual,
-          nextStage,
-        });
-      }
-    });
-  });
-
-  return gaps;
+/* ---------- Data issues ---------- */
+function renderDQ(v){
+  const M=MODEL,p=el('div','panel');
+  p.innerHTML=`<h3>Column health</h3><p class="sub num">${DATA.foundCols}/${DATA.totalCols} expected columns found in Combined Delivery Data (matched forgivingly — spacing and capitals don't matter).</p>`;
+  v.append(p);
+  const q=el('div','panel');q.innerHTML=`<h3>Things to fix in the tracker</h3><p class="sub">Written for humans — each row says what's wrong and what to do.</p>`;
+  if(!M.dq.length)q.append(el('div','empty','No issues found. Clean sheet.'));
+  else{const t=el('table');t.innerHTML=`<thead><tr><th></th><th>What's wrong</th><th>Do this</th></tr></thead>`;
+    const bd=el('tbody');
+    M.dq.forEach(d=>{bd.insertAdjacentHTML('beforeend',
+      `<tr><td><span class="chip ${d.sev}">${d.sev==='red'?'⚠️':d.sev==='amber'?'🟠':'ℹ️'}</span></td><td>${esc(d.txt)}</td><td>${esc(d.act)}</td></tr>`);});
+    t.append(bd);q.append(t);}
+  v.append(q);
 }
 
-function renderStageGaps() {
-  const gaps = computeStageGaps();
-  const tbody = document.getElementById('gapsTbody');
-  tbody.innerHTML = '';
-  const fmt = (d) => (d instanceof Date && !isNaN(d) ? d.toLocaleDateString() : '');
-  const titleCase = (s) => (s || '').replace(/\b\w/g, (c) => c.toUpperCase());
-
-  gaps.forEach((g) => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${g.reportName}</td>
-      <td>${g.domain}</td>
-      <td>${g.po}</td>
-      <td><span class="badge">${(g.completedStage || '').trim()}</span></td>
-      <td>${fmt(g.completedOn)}</td>
-      <td>${STAGE_LABELS[g.nextStage] || titleCase(g.nextStage)}</td>
-    `;
-    tbody.appendChild(tr);
-  });
-
-  document.getElementById('gapsTable').style.display = gaps.length ? 'table' : 'none';
-  document.getElementById('gapsEmpty').style.display = gaps.length ? 'none' : 'block';
+/* ---------- report modal ---------- */
+function openReport(name){
+  const r=DATA.reports.find(x=>x.name===name); if(!r)return;
+  location.hash='#report='+encodeURIComponent(name);
+  const m=$('#modal');
+  const pipe=r.stages.map(s=>{
+    const done=!!s.act, cur=r.curStage===s;
+    const line=(lbl,d)=>{
+      const isLatest=d&&r.estFinish&&days(d,r.estFinish)===0&&r.estFinishSrc===`${s.key} ${lbl}`;
+      return `<span class="sl${isLatest?' flag':''}">${lbl} <b>${d?fmtD(d):'—'}</b>${isLatest?` ◄ latest entered${s.owner?' · '+esc(s.owner):''}`:''}</span>`;};
+    return `<div class="pstage ${done?'done':''} ${cur?'cur':''} ${cur&&r.blocked?'blockd':''}">
+      <div class="pn">${done?'🟢':cur?(r.blocked?'⛔':'🔵'):'·'} ${s.key}</div>
+      <div class="pd">${line('Baseline',s.base)}${line('Reforecast',s.re)}${line('Actual',s.act)}${s.owner?esc(s.owner):'<span style="color:var(--dim)">no owner</span>'}</div></div>`;}).join('');
+  const hist=(MODEL.rwByReport[r.name]||[]).map(w=>
+    `<tr><td class="num">${fmtD(w.sent)}</td><td>${esc(w.from)} → ${esc(w.to)}</td><td>${esc(w.by)}</td><td>${esc(w.why)}</td><td>${w.resolved?`<span class="chip green">fixed ${fmtD(w.fixed)}</span>`:(w.expFix?`<span class="chip blue">fix due ${fmtD(w.expFix)}</span>`:'<span class="chip amber">⚠️ unclaimed</span>')}</td></tr>`).join('');
+  m.innerHTML=`<button class="mclose" aria-label="Close">×</button><h2>${esc(r.name)}</h2>
+    <p class="sub">${esc(r.domain)} · ${esc(r.status)} ${r.released?'<span class="chip green">🟢 Released'+(r.releaseDate?' '+fmtD(r.releaseDate):'')+'</span>':''} ${r.blocked?`<span class="chip red">⛔ ${esc(r.blockedRaw)}</span>`:''} ${r.varDays!=null&&!r.released?`<span class="chip ${r.varDays>0?'amber':'green'}">variance vs Base ${r.varDays>0?'+':''}${r.varDays}d</span>`:''}</p>
+    <div class="pipe">${pipe}</div>
+    <p class="sub num">Baseline: <b>${fmtDY(r.baseFinish)}</b>${r.baseFinishSrc?` <span style="color:var(--dim)">(${esc(r.baseFinishSrc)})</span>`:''}${r.estFinish?` · Latest past Baseline: <b style="color:var(--amber)">${fmtDY(r.estFinish)}</b> <span style="color:var(--dim)">(${esc(r.estFinishSrc)}${(()=>{const st=r.stages.find(x=>r.estFinishSrc&&r.estFinishSrc.startsWith(x.key));return st&&st.owner?' — '+esc(st.owner):'';})()})</span>`:''}</p>
+    ${hist?`<p class="eyebrow">Send-back history · ${(MODEL.rwByReport[r.name]||[]).length}</p><table class="rwhist"><tbody>${hist}</tbody></table>`:''}
+    ${r.comments?`<p class="sub" style="margin-top:10px">💬 ${esc(r.comments)}</p>`:''}
+    <p class="linkrow">${r.uat?`<a href="${esc(r.uat)}" target="_blank" rel="noopener">UAT report ↗</a> · `:''}${r.prod?`<a href="${esc(r.prod)}" target="_blank" rel="noopener">Production ↗</a> · `:''}<span style="color:var(--dim)">share: <kbd>#report=${encodeURIComponent(r.name)}</kbd></span></p>`;
+  $('#modalbg').classList.add('open');
+  m.querySelector('.mclose').onclick=closeModal;
 }
+function closeModal(){$('#modalbg').classList.remove('open');if(location.hash.startsWith('#report'))history.replaceState(null,'','#');}
+$('#modalbg').addEventListener('click',e=>{if(e.target.id==='modalbg')closeModal();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
 
-// ---------------------------------------------------------------------------
-// Plan Delivery Month mismatches - populated by deriveFactAndDimFromCombinedData
-// (see planMonthMismatches there for the actual comparison/fallback rule).
-// This just renders whatever it found.
-// ---------------------------------------------------------------------------
-
-function renderPlanMonthMismatches() {
-  const tbody = document.getElementById('planMonthMismatchTbody');
-  tbody.innerHTML = '';
-  const fmt = (d) => (d instanceof Date && !isNaN(d) ? d.toLocaleDateString() : '');
-
-  planMonthMismatches.forEach((m) => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${m['Report Name']}</td>
-      <td>${m['Domain']}</td>
-      <td>${m['PO']}</td>
-      <td>${m['Plan Delivery Month']}</td>
-      <td><span class="badge">${(m['Latest Stage Reached'] || '').trim()}</span></td>
-      <td>${fmt(m['Latest Stage Expected Date'])}</td>
-    `;
-    tbody.appendChild(tr);
-  });
-
-  document.getElementById('planMonthMismatchTable').style.display = planMonthMismatches.length ? 'table' : 'none';
-  document.getElementById('planMonthMismatchEmpty').style.display = planMonthMismatches.length ? 'none' : 'block';
+/* ---------- shell ---------- */
+function render(){
+  const v=$('#view');v.innerHTML='';
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.v===VIEW));
+  ({q1:renderQ1,q3:renderQ3,dq:renderDQ})[VIEW](v);
+  $('#dqbadge').textContent=MODEL.dq.length||'';
 }
-
-// ---------------------------------------------------------------------------
-// Missing Confirmed Deployed Date - populated by deriveFactAndDimFromCombinedData
-// (see missingConfirmedDeployedDate there for the actual check). This just
-// renders whatever it found.
-// ---------------------------------------------------------------------------
-
-function renderMissingConfirmedDeployedDate() {
-  const tbody = document.getElementById('missingConfirmedDeployedTbody');
-  tbody.innerHTML = '';
-
-  missingConfirmedDeployedDate.forEach((m) => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${m['Report Name']}</td>
-      <td>${m['Domain']}</td>
-      <td>${m['PO']}</td>
-    `;
-    tbody.appendChild(tr);
-  });
-
-  document.getElementById('missingConfirmedDeployedTable').style.display = missingConfirmedDeployedDate.length ? 'table' : 'none';
-  document.getElementById('missingConfirmedDeployedEmpty').style.display = missingConfirmedDeployedDate.length ? 'none' : 'block';
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{VIEW=t.dataset.v;render();});
+function boot(buf,label,when){
+  try{
+    const wb=XLSX.read(new Uint8Array(buf),{type:'array',cellDates:true});
+    DATA=parseWorkbook(wb);
+    if(DATA.error){alert(DATA.error);return;}
+    MODEL=compute(DATA);
+    $('#drop').style.display='none';$('#app').style.display='';
+    const w=when?new Date(when):new Date();
+    const stale=(Date.now()-w.getTime())>864e5;
+    $('#stamp').innerHTML=`Tracker refreshed <b>${w.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'})} at ${w.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'})}</b> · ${esc(label)}${stale?' · ⚠️ over a day old':''}`;
+    $('#stamp').classList.toggle('warn',stale);
+    const h=new URLSearchParams(location.hash.slice(1));
+    if(h.get('person')){PERSON=h.get('person');VIEW='q3';}
+    render();
+    if(h.get('report'))openReport(h.get('report'));
+  }catch(e){alert('Could not read that file: '+e.message);}
 }
+const drop=$('#drop'),fi=$('#file');
+drop.onclick=()=>fi.click();
+drop.onkeydown=e=>{if(e.key==='Enter')fi.click();};
+['dragover','dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.toggle('on',ev==='dragover');}));
+drop.addEventListener('drop',e=>{const f=e.dataTransfer.files[0];if(f)f.arrayBuffer().then(b=>boot(b,f.name,f.lastModified));});
+fi.onchange=()=>{const f=fi.files[0];if(f)f.arrayBuffer().then(b=>boot(b,f.name,f.lastModified));};
+(typeof fetch==='function'?fetch('data/GDM_Tracker_latest.xlsx',{cache:'no-store'}):Promise.reject()).then(r=>{
+  if(!r.ok)throw 0;
+  const lm=r.headers.get('last-modified');
+  return r.arrayBuffer().then(b=>boot(b,'auto-loaded from data/',lm));
+}).catch(()=>{});
 
-// ---------------------------------------------------------------------------
-// Current Status / Actual Completion Date mismatches - populated by
-// deriveFactAndDimFromCombinedData (see statusActualMismatches there for the
-// actual check). This just renders whatever it found.
-// ---------------------------------------------------------------------------
-
-function renderStatusActualMismatches() {
-  const tbody = document.getElementById('statusActualMismatchTbody');
-  tbody.innerHTML = '';
-  const fmt = (d) => (d instanceof Date && !isNaN(d) ? d.toLocaleDateString() : '');
-
-  statusActualMismatches.forEach((m) => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${m['Report Name']}</td>
-      <td>${m['Domain']}</td>
-      <td>${m['PO']}</td>
-      <td><span class="badge">${m['Current Status']}</span></td>
-      <td><span class="badge">${m['Missing Actual For Stage']}</span></td>
-      <td>${fmt(m['Prior Stage Expected Completion Date'])}</td>
-    `;
-    tbody.appendChild(tr);
-  });
-
-  document.getElementById('statusActualMismatchTable').style.display = statusActualMismatches.length ? 'table' : 'none';
-  document.getElementById('statusActualMismatchEmpty').style.display = statusActualMismatches.length ? 'none' : 'block';
-}
-
-// ---------------------------------------------------------------------------
-// Current Status lagging behind completion - populated by
-// deriveFactAndDimFromCombinedData (see currentStatusStageMismatches there
-// for the actual check: Current Status = "QA" but QA Actual Completion Date
-// is already filled in). This just renders whatever it found.
-// ---------------------------------------------------------------------------
-
-function renderCurrentStatusStageMismatches() {
-  const tbody = document.getElementById('currentStatusStageMismatchTbody');
-  tbody.innerHTML = '';
-  const fmt = (d) => (d instanceof Date && !isNaN(d) ? d.toLocaleDateString() : '');
-
-  currentStatusStageMismatches.forEach((m) => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${m['Report Name']}</td>
-      <td>${m['Domain']}</td>
-      <td>${m['PO']}</td>
-      <td><span class="badge">${m['Current Status']}</span></td>
-      <td><span class="badge">${m['Completed Stage']}</span></td>
-      <td>${fmt(m['Completed On'])}</td>
-      <td><span class="badge">${m['Implied Stage']}</span></td>
-    `;
-    tbody.appendChild(tr);
-  });
-
-  document.getElementById('currentStatusStageMismatchTable').style.display = currentStatusStageMismatches.length ? 'table' : 'none';
-  document.getElementById('currentStatusStageMismatchEmpty').style.display = currentStatusStageMismatches.length ? 'none' : 'block';
-}
-
-// ---------------------------------------------------------------------------
-// Raw Fact Table / Dim Table view - a plain, unfiltered dump of exactly what
-// the app computed, for verifying the derivation logic directly instead of
-// having to cross-check the heatmap/drill-down by eye. Nothing here writes
-// back to any file; "Download as Excel" just saves a fresh workbook built
-// from the in-memory factRows/dimRows using SheetJS, entirely client-side.
-// ---------------------------------------------------------------------------
-
-function renderRawTables() {
-  const fmt = (d) => (d instanceof Date && !isNaN(d) ? d.toLocaleDateString() : '');
-
-  document.getElementById('rawFactCount').textContent = factRows.length;
-  const factTbody = document.getElementById('rawFactTbody');
-  factTbody.innerHTML = '';
-  factRows.forEach((row) => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${row['Domain'] || ''}</td>
-      <td>${row['Status'] || ''}</td>
-      <td>${row['Report Name'] || ''}</td>
-      <td>${row['DB Developers '] ?? row['DB Developers'] ?? ''}</td>
-      <td>${row['PBI Developers'] || ''}</td>
-      <td>${row['Schema'] || ''}</td>
-      <td>${row['PO'] || ''}</td>
-      <td>${fmt(row['Status Start Date'])}</td>
-      <td>${fmt(row['Expected Release Date'])}</td>
-      <td>${fmt(row['Actual Release Date'])}</td>
-    `;
-    factTbody.appendChild(tr);
-  });
-
-  document.getElementById('rawDimCount').textContent = dimRows.length;
-  const dimTbody = document.getElementById('rawDimTbody');
-  dimTbody.innerHTML = '';
-  dimRows.forEach((row) => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${row['Domain'] || ''}</td>
-      <td>${row['Expected Report Count'] ?? ''}</td>
-      <td>${fmt(row['Expected Release Date'])}</td>
-    `;
-    dimTbody.appendChild(tr);
-  });
-
-  document.getElementById('rawTablesContainer').style.display = 'block';
-}
-
-document.getElementById('toggleRawTablesBtn').addEventListener('click', () => {
-  const body = document.getElementById('rawTablesBody');
-  const btn = document.getElementById('toggleRawTablesBtn');
-  const showing = body.style.display !== 'none';
-  body.style.display = showing ? 'none' : 'block';
-  btn.textContent = showing ? 'Show' : 'Hide';
-});
-
-document.getElementById('downloadRawTablesBtn').addEventListener('click', () => {
-  const factCols = ['Domain', 'Status', 'Report Name', 'DB Developers ', 'PBI Developers', 'Schema', 'PO', 'Status Start Date', 'Expected Release Date', 'Actual Release Date'];
-  const factSheet = XLSX.utils.json_to_sheet(factRows, { header: factCols });
-  const dimCols = ['Domain', 'Expected Report Count', 'Expected Release Date'];
-  const dimSheet = XLSX.utils.json_to_sheet(dimRows, { header: dimCols });
-
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, factSheet, 'Fact Table');
-  XLSX.utils.book_append_sheet(wb, dimSheet, 'Dim Table');
-  XLSX.writeFile(wb, 'Fact_Dim_Table_Computed.xlsx');
-});
-
-(async function init() {
-  try {
-    const statusRes = await fetch('/api/oauth-status');
-    const status = await statusRes.json();
-
-    if (status.mode === 'oauth' && !status.connected) {
-      document.getElementById('connectGate').style.display = 'block';
-      document.getElementById('mainUi').style.display = 'none';
-      return;
-    }
-
-    document.getElementById('connectGate').style.display = 'none';
-    document.getElementById('mainUi').style.display = 'block';
-    if (status.siteUrl) {
-      const badge = document.getElementById('siteBadge');
-      badge.textContent = `Connected to ${status.siteUrl}`;
-      badge.style.display = 'block';
-    }
-
-    await loadConfig();
-    await loadTickets();
-  } catch (err) {
-    document.getElementById('msg').textContent = err.message;
-    document.getElementById('msg').classList.add('error');
-  }
-})();
 </script>
 </body>
 </html>
