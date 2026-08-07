@@ -187,6 +187,16 @@ select,input[type=file]{background:var(--panel2);color:var(--text);border:1px so
 .sl{display:block;font-family:var(--mono);font-size:10.5px;color:var(--muted);line-height:1.55}
 .sl b{color:var(--text);font-weight:600}
 .sl.flag{color:var(--amber)} .sl.flag b{color:var(--amber)}
+.sl.estdpo{color:var(--purple)} .sl.estdpo b{color:var(--purple)}
+/* ---------- computed forecast banner ---------- */
+.panel.fc{border-color:var(--purple);background:linear-gradient(180deg,var(--purple-bg),var(--panel))}
+.fc-main{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 22px}
+.fc-date{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 12px}
+.fc-k{font-size:12.5px;color:var(--muted)}
+.fc-v{font-family:var(--mono);font-size:25px;font-weight:700;color:var(--purple);letter-spacing:.3px}
+.fc-meta{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;font-size:12px;color:var(--muted)}
+.fc-meta .num{color:var(--text)}
+.fc-note{color:var(--dim);font-size:11.5px}
 .rwhist td{font-size:12.5px}
 .linkrow{margin-top:10px;font-size:13px}
 kbd{font-family:var(--mono);background:#202c3f;border-radius:4px;padding:1px 6px;font-size:11px;color:var(--muted)}
@@ -209,6 +219,7 @@ button:focus-visible,.tab:focus-visible,.card:focus-visible,tr:focus-visible{out
     <span>⚠️ Missing information</span>
     <span><b style="color:var(--text)">Base</b> = original baseline promise (never moves)</span>
     <span><b style="color:var(--text)">Reforecast</b> = the current commitment; where none exists the app uses <b style="color:var(--text)">Base</b> — every date is tagged with which one it is</span>
+    <span><b style="color:var(--purple)">✦ Est. (purple)</b> = computed forecast, not a tracker cell: DPO Approval estimated as QA completion + 7 workdays</span>
   </div>
 </details>
 
@@ -252,6 +263,11 @@ function asDate(v){
 }
 const today0 = ()=>{const n=new Date();return new Date(n.getFullYear(),n.getMonth(),n.getDate());};
 const days = (a,b)=>Math.round((b-a)/DAY);
+// add N working days (skip Sat/Sun) — used only for the computed DPO forecast
+function addWorkdays(d,n){ if(!d)return null;
+  const r=new Date(d.getFullYear(),d.getMonth(),d.getDate()); let added=0;
+  while(added<n){ r.setDate(r.getDate()+1); const wd=r.getDay(); if(wd!==0&&wd!==6)added++; }
+  return r; }
 const fmtD = d=>d?d.toLocaleDateString(undefined,{month:'short',day:'numeric'}):'—';
 const fmtDY = d=>d?d.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}):'—';
 const monKey = d=>d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`:null;
@@ -355,6 +371,35 @@ function compute(data){
     r.estShort=r.estKind==='entered'?shorten(r.estFinishSrc):null;
     r.varDays=(r.baseFinish&&r.estFinish)?days(r.baseFinish,r.estFinish):null;
   });
+  // ---- computed forecast: Estimated DPO Approval = QA completion + 7 workdays ----
+  // Not a tracker cell. Traceable per report back to its QA date. Only for not-yet-released reports.
+  const DPO_WORKDAYS=7;
+  reports.forEach(r=>{
+    r.estDPO=null; r.estDPOsrc=null; r.estDPOfromActual=false;
+    if(r.released)return;
+    const qa=r.stages[2];                 // QA stage
+    const qaDate=qa.act||qa.est||null;    // prefer QA Actual; else the later of QA Reforecast/Baseline
+    if(!qaDate)return;
+    r.estDPOfromActual=!!qa.act;
+    const qaSrc=qa.act?'QA Actual':(qa.re&&(!qa.base||qa.re>=qa.base)?'QA Reforecast':'QA Baseline');
+    r.estDPO=addWorkdays(qaDate,DPO_WORKDAYS);
+    r.estDPOsrc=`${qaSrc} + ${DPO_WORKDAYS} workdays`;
+  });
+  M.estDPOcount=reports.filter(r=>!r.released&&r.estDPO).length;
+  M.estNoQA=reports.filter(r=>!r.released&&!r.estDPO).length;   // no QA date yet — excluded from estimate
+  // Final forecasted date per report: the tracker's own DPO date where entered (Actual, else the
+  // later of Reforecast/Baseline), else the computed QA+7 — whichever is later governs.
+  reports.forEach(r=>{
+    if(r.released){r.fcFinish=r.releaseDate;r.fcSrc='Released';r.fcComputed=false;return;}
+    const dpo=r.stages[3];
+    const cell=dpo.act||dpo.est||null;
+    const cellSrc=dpo.act?'DPO Actual':(dpo.re&&(!dpo.base||dpo.re>=dpo.base)?'DPO Reforecast':'DPO Baseline');
+    if(cell&&(!r.estDPO||cell>=r.estDPO)){r.fcFinish=cell;r.fcSrc=cellSrc;r.fcComputed=false;}
+    else if(r.estDPO){r.fcFinish=r.estDPO;r.fcSrc=r.estDPOsrc;r.fcComputed=true;}
+    else{r.fcFinish=null;r.fcSrc=null;r.fcComputed=false;}
+  });
+  // Estimated full project completion = latest Final forecasted date across all reports
+  M.estProjComplete=reports.reduce((m,r)=>r.fcFinish&&(!m||r.fcFinish>m)?r.fcFinish:m,null);
   // program numbers — clock 1: Base, clock 2: Est, clock 3: projected finish
   M.total=reports.length;
   M.released=reports.filter(r=>r.released).length;
@@ -436,6 +481,14 @@ function compute(data){
   // A report lives in ONE month bucket for its whole lifecycle: Plan Delivery
   // Date's month, falling back to its Base finish month.
   M.bucketOf=r=>monKey(r.planDate||r.baseFinish);
+  // estimated completion per delivery month: latest Final forecasted date in the bucket
+  M.monthComplete=[...new Set(reports.map(r=>M.bucketOf(r)).filter(Boolean))].sort().map(mk=>{
+    const bu=reports.filter(r=>M.bucketOf(r)===mk);
+    const open=bu.filter(r=>!r.released).length;
+    const fc=bu.reduce((m,r)=>r.fcFinish&&(!m||r.fcFinish>m)?r.fcFinish:m,null);
+    const baseEnd=bu.reduce((m,r)=>r.baseFinish&&(!m||r.baseFinish>m)?r.baseFinish:m,null);
+    return {mk,open,total:bu.length,fc,baseEnd,late:(fc&&baseEnd)?days(baseEnd,fc):null,done:!open};
+  });
   M.dim=data.dim||[];
   M.dimDomains=[...new Set(M.dim.map(d=>d.domain))];
   M.dimMonths=[...new Set(M.dim.map(d=>d.mk))].sort();
@@ -525,9 +578,49 @@ function dueChip(s){ if(!s||!s.est)return '';
 
 /* ---------- Question 1 ---------- */
 function renderQ1(v){
+  forecastBanner(v);         // computed estimate: when the program truly completes
+  whyLatePanel(v);           // leadership summary — why we're late, in the director's words
   v.append(dimTimeline());   // the start — and the source of truth for "how late"
   outlookPanel(v);           // what's coming, filterable
   reworksPanel(v);           // last table on the page
+}
+function whyLatePanel(v){
+  const p=el('div','panel');
+  p.innerHTML=`<p class="eyebrow">Why we're late — director's summary</p>
+  <table style="font-size:13px">
+    <tbody>
+    <tr><td style="width:180px;color:var(--muted)">Masking &amp; roles</td>
+      <td>Took longer than planned, but a worthwhile investment — users no longer have to pick roles, a much better experience.</td></tr>
+    <tr><td style="color:var(--muted)">Work orders resolved</td>
+      <td>Open questions on handling work orders (Maximo vs Salesforce) are now settled.</td></tr>
+    <tr><td style="color:var(--muted)">Hardest part done</td>
+      <td>The curated-view baseline for CMS — the hardest of the domains — is complete. Remaining work is building the reporting views off that baseline, with the aim of making up time.</td></tr>
+    </tbody>
+  </table>`;
+  v.append(p);
+}
+function forecastBanner(v){
+  const M=MODEL;
+  const FC_MK='2026-07'; // ← filtered to the July baseline delivery bucket
+  const x=(M.monthComplete||[]).find(y=>y.mk===FC_MK);
+  if(!x||!x.fc)return;
+  const bu=DATA.reports.filter(r=>M.bucketOf(r)===FC_MK);
+  const drv=bu.filter(r=>!r.released&&r.fcFinish&&days(r.fcFinish,x.fc)===0)[0]||null;
+  const p=el('div','panel fc');
+  p.innerHTML=`<p class="eyebrow" style="color:var(--purple)">✦ Forecast · ${monLbl(FC_MK)} baseline delivery · tracker DPO dates where entered, else computed QA + 7 workdays</p>
+    <div class="fc-main">
+      <div class="fc-date">
+        <span class="fc-k">Estimated ${monLbl(FC_MK)} delivery completion</span>
+        <span class="fc-v">${fmtDY(x.fc)}</span>
+      </div>
+      <div class="fc-meta">
+        <span>${monLbl(FC_MK)} baseline end <b class="num">${fmtDY(x.baseEnd)}</b></span>
+        ${x.late!=null?`<span class="chip ${x.late>0?'red':'green'}">${x.late>0?'+'+x.late+'d late':'on plan'}</span>`:''}
+        <span><b class="num">${x.open}</b> of <b class="num">${x.total}</b> still open</span>
+      </div>
+    </div>
+    <p class="fc-note" style="margin:10px 0 0">${monLbl(FC_MK)}-bucket reports only. Each report's completion is its tracker DPO date where entered (Actual, else the later of Reforecast / Baseline), otherwise ✦ computed as QA completion + 7 workdays — whichever is later.${drv?` Driver: <b style="color:var(--text)">${esc(drv.name)}</b> <span style="color:var(--dim)">(${drv.fcComputed?'✦ ':''}${esc(drv.fcSrc||'')})</span>.`:''}</p>`;
+  v.append(p);
 }
 function stageReason(r){
   if(r.blocked)return{k:'blocked',t:`⛔ Blocked — ${r.blockTarget} must fix`};
@@ -677,7 +770,7 @@ function drilldownPanel(){
       inner=`<b>${type==='dom'?`${esc(dom)} — latest date entered past Baseline`:`This delivery — latest date entered past Baseline`}:</b> <span class="num">${fmtD(drv.estFinish)}</span> (${esc(drv.estShort)}) — on ${esc(drv.name)} · <b>now in ${esc(drv.status)}</b>${drv.blocked?' ⛔':''}`;}
     else{inner=`<b>Est. completion:</b> nothing entered past Baseline yet.`;}
     return `<div style="margin:8px 0 4px;background:var(--amber-bg);color:var(--amber);border-radius:8px;padding:7px 11px;font-size:12.5px">${inner}</div>`;})()}
-  <p class="sub">${type==='dim'?'<b>Current stage due</b> = the later of the stage\'s Baseline and Reforecast Completion Dates. <b>Days overdue</b> = days past the Current stage due (the later of Baseline / Reforecast) shown to its left — nothing else. <b>Final completion</b> = the Baseline, and under it the latest date entered after it — named by its tracker cell (Actual / Reforecast / Baseline). 💬 = Comments column.':'Reports planned (Base) for this month, plus any actually released in it.'}</p>`;
+  <p class="sub">${type==='dim'?'<b>Days overdue</b> = days past the current stage\'s due date (the later of its Baseline and Reforecast Completion Dates) — nothing else. <b>Final completion</b> = the Baseline, and under it the <b style="color:var(--red)">Final forecasted date</b> — the tracker\'s DPO date where entered (Actual / Reforecast / Baseline), else ✦ computed as QA completion + 7 workdays; red = past the Baseline, with how many days late. 💬 = Comments column.':'Reports planned (Base) for this month, plus any actually released in it.'}</p>`;
   p.querySelector('.mclose').onclick=()=>{DRILL=null;render();};
   const cmts=items.filter(r=>r.comments);
   const cntEl=p.querySelector('h3 .cnt');
@@ -689,30 +782,25 @@ function drilldownPanel(){
       grp.forEach(r=>dg.insertAdjacentHTML('beforeend',
         `<div class="ol-item" style="align-items:flex-start"><span style="flex:0 0 220px;font-size:12px">${esc(r.name)}</span><span style="color:var(--muted);font-size:12px">${esc(r.comments)}</span></div>`));});
     p.append(dg);}
-  const t=el('table');t.innerHTML=`<thead><tr><th>Report</th><th>Current Status</th><th>Current stage due</th><th>Days overdue<span style="display:block;font-size:9px;font-weight:400;text-transform:none;letter-spacing:0">the later of Baseline / Reforecast</span></th><th>Final completion — Baseline · latest entered</th><th>Assigned to</th></tr></thead>`;
+  const t=el('table');t.innerHTML=`<thead><tr><th>Report</th><th>Current Status</th><th>Days overdue<span style="display:block;font-size:9px;font-weight:400;text-transform:none;letter-spacing:0">past the stage due — later of Baseline / Reforecast</span></th><th>Final completion Baseline — Final forecasted date</th></tr></thead>`;
   const bd=el('tbody');
   const lateOf=r=>{if(r.released)return null;const g=r.curStage&&r.curStage.est?r.curStage.est:r.baseFinish;
     return g&&g<MODEL.T?{d:days(g,MODEL.T),src:r.curStage?srcOf(r.curStage):'Base'}:null;};
   items.sort((a,b)=>((lateOf(b)?.d)||0)-((lateOf(a)?.d)||0)||((a.baseFinish||0)-(b.baseFinish||0))).forEach(r=>{
     const tr=el('tr','rowlink');tr.tabIndex=0;
-    const next=r.released?`<span class="chip green">🟢 Released ${fmtD(r.releaseDate)}</span>`
-      :r.curStage&&r.curStage.est?`<span class="num">${fmtD(r.curStage.est)} <span style="color:var(--dim)">(${srcOf(r.curStage)})</span></span>`
-      :r.curStage?'<span class="chip dim">no date</span>':'<span class="chip dim">not started</span>';
     const lt=lateOf(r);
     const openRw=(MODEL.rwByReport[r.name]||[]).some(w2=>!w2.resolved);
     const badge=r.released?'':(r.blocked?`<span class="chip red">⛔ ${esc((r.blockedRaw||'Blocked').replace(/^yes\s*[–-]\s*/i,''))}</span>`:openRw?'<span class="chip purple">🔁 Open rework</span>':'');
     const clines=r.comments?String(r.comments).split(/\r?\n/).map(x=>x.trim()).filter(Boolean):[];
     const cmt=clines.length?`<div style="color:var(--dim);font-size:11px;max-width:340px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(r.comments)}">💬 ${clines.length>1?'latest: ':''}${esc(clines[clines.length-1])}</div>`:'';
-    const sameDay=r.baseFinish&&r.estFinish&&days(r.baseFinish,r.estFinish)===0;
+    const fcLate=r.fcFinish&&r.baseFinish&&r.fcFinish>r.baseFinish;
     const fin=r.released?`<span class="chip green">🟢 ${fmtD(r.releaseDate)}</span>`
-      :`<span class="two-clock"><span class="est" title="${esc(r.baseFinishSrc||'')}">Baseline ${fmtD(r.baseFinish)}</span>${r.estFinish&&!sameDay?`<span class="base" title="${esc(r.estFinishSrc||'')}">${esc(r.estShort)} ${fmtD(r.estFinish)}</span>`:''}</span>`;
+      :`<span class="two-clock"><span class="est" title="${esc(r.baseFinishSrc||'')}">Baseline ${fmtD(r.baseFinish)}</span>${r.fcFinish?`<span class="base" style="color:${fcLate?'var(--red)':'var(--green)'}" title="${r.fcComputed?'✦ computed forecast, not a tracker cell — ':''}${esc(r.fcSrc||'')}">${r.fcComputed?'✦ ':''}Forecast ${fmtD(r.fcFinish)}${fcLate?` · ${days(r.baseFinish,r.fcFinish)}d late`:''}</span>`:`<span class="base">no DPO or QA date — no forecast</span>`}</span>`;
 
     tr.innerHTML=`<td>${esc(r.name)}<div style="color:var(--dim);font-size:11px">${esc(r.domain)}${badge?' · ':''}${badge}</div>${cmt}</td>
       <td>${esc(r.status)}</td>
-      <td>${next}</td>
       <td class="num">${lt?`<span class="chip ${lt.d>3?'red':'amber'}">${lt.d>3?'⏰':'🟠'} ${lt.d}d</span>`:(r.released?'—':'<span class="chip green">on plan</span>')}</td>
-      <td>${fin}</td>
-      <td>${esc(r.curStage?r.curStage.owner:'')}</td>`;
+      <td>${fin}</td>`;
     tr.onclick=()=>openReport(r.name);tr.onkeydown=e=>{if(e.key==='Enter')openReport(r.name);};
     bd.append(tr);});
   t.append(bd);p.append(t);return p;
@@ -794,9 +882,11 @@ function openReport(name){
     const line=(lbl,d)=>{
       const isLatest=d&&r.estFinish&&days(d,r.estFinish)===0&&r.estFinishSrc===`${s.key} ${lbl}`;
       return `<span class="sl${isLatest?' flag':''}">${lbl} <b>${d?fmtD(d):'—'}</b>${isLatest?` ◄ latest entered${s.owner?' · '+esc(s.owner):''}`:''}</span>`;};
+    const estDPOline=(s.key==='DPO Approval'&&r.estDPO&&!r.released)
+      ? `<span class="sl estdpo">Est. <b>${fmtD(r.estDPO)}</b> ◄ ${esc(r.estDPOsrc)}</span>` : '';
     return `<div class="pstage ${done?'done':''} ${cur?'cur':''} ${cur&&r.blocked?'blockd':''}">
       <div class="pn">${done?'🟢':cur?(r.blocked?'⛔':'🔵'):'·'} ${s.key}</div>
-      <div class="pd">${line('Baseline',s.base)}${line('Reforecast',s.re)}${line('Actual',s.act)}${s.owner?esc(s.owner):'<span style="color:var(--dim)">no owner</span>'}</div></div>`;}).join('');
+      <div class="pd">${line('Baseline',s.base)}${line('Reforecast',s.re)}${line('Actual',s.act)}${estDPOline}${s.owner?esc(s.owner):'<span style="color:var(--dim)">no owner</span>'}</div></div>`;}).join('');
   const hist=(MODEL.rwByReport[r.name]||[]).map(w=>
     `<tr><td class="num">${fmtD(w.sent)}</td><td>${esc(w.from)} → ${esc(w.to)}</td><td>${esc(w.by)}</td><td>${esc(w.why)}</td><td>${w.resolved?`<span class="chip green">fixed ${fmtD(w.fixed)}</span>`:(w.expFix?`<span class="chip blue">fix due ${fmtD(w.expFix)}</span>`:'<span class="chip amber">⚠️ unclaimed</span>')}</td></tr>`).join('');
   m.innerHTML=`<button class="mclose" aria-label="Close">×</button><h2>${esc(r.name)}</h2>
