@@ -284,7 +284,11 @@ function parseWorkbook(wb){
   if(!ws) return {error:'Sheet "Combined Delivery Data" not found — is this the GDM Tracker file?'};
   const grid=XLSX.utils.sheet_to_json(ws,{header:1,defval:null,raw:true});
   const hdr=(grid[0]||[]).map(norm);
-  const col={}; CORE_COLS.forEach(c=>{const i=hdr.indexOf(norm(c)); if(i>=0)col[c]=i;});
+  // exact match first; else a header that begins with the expected name
+  // (tolerates notes typed into headers, e.g. "Current Status  (Update next stage...)")
+  const findCol=c=>{const n=norm(c);let i=hdr.indexOf(n);
+    if(i<0)i=hdr.findIndex(h=>h.startsWith(n));return i;};
+  const col={}; CORE_COLS.forEach(c=>{const i=findCol(c); if(i>=0)col[c]=i;});
   const missingCols=CORE_COLS.filter(c=>col[c]==null);
   const get=(row,c)=>col[c]==null?null:row[col[c]];
   const reports=[];
@@ -317,7 +321,7 @@ function parseWorkbook(wb){
     const g=XLSX.utils.sheet_to_json(rwWs,{header:1,defval:null,raw:true});
     const h=(g[1]||[]).map(norm); const idx={}; 
     ['Report Name','Date Sent Back','From Stage','To Stage','Sent Back By','What Was Wrong','Resolved?','Expected Fix Date','Date Fixed']
-      .forEach(c=>{idx[c]=h.indexOf(norm(c));});
+      .forEach(c=>{const n=norm(c);let i=h.indexOf(n);if(i<0)i=h.findIndex(x=>x&&x.startsWith(n));idx[c]=i;});
     for(let r=2;r<g.length;r++){const row=g[r]; if(!row)continue;
       const name=clean(idx['Report Name']>=0?row[idx['Report Name']]:null); if(!name)continue;
       reworks.push({name,sent:asDate(row[idx['Date Sent Back']]),from:clean(row[idx['From Stage']]),to:clean(row[idx['To Stage']]),
@@ -330,7 +334,8 @@ function parseWorkbook(wb){
   if(dimWs){
     const g=XLSX.utils.sheet_to_json(dimWs,{header:1,defval:null,raw:true});
     const h=(g[1]||[]).map(norm);
-    const di=h.indexOf(norm('Domain')), ci=h.indexOf(norm('Expected Report Count')), ei=h.indexOf(norm('Expected Release Date'));
+    const fc=c=>{const n=norm(c);let i=h.indexOf(n);if(i<0)i=h.findIndex(x=>x&&x.startsWith(n));return i;};
+    const di=fc('Domain'), ci=fc('Expected Report Count'), ei=fc('Expected Release Date');
     for(let r=2;r<g.length;r++){const row=g[r]; if(!row)continue;
       const dom=clean(row[di]), cnt=Number(row[ci]), d=asDate(row[ei]);
       if(dom&&cnt&&d)dim.push({domain:dom,count:cnt,mk:monKey(d)});}
@@ -537,7 +542,7 @@ function compute(data){
 </script>
 <script>
 /* ============================== render layer ============================== */
-let DATA=null, MODEL=null, VIEW='q1', PERSON='', PERSON2='', DRILL=null;
+let DATA=null, MODEL=null, VIEW='q1', PERSON='', PERSON2='', DRILL=null, DRILLST='';
 let HORIZON={mode:'days',days:14};
 const $=s=>document.querySelector(s);
 const el=(t,c,h)=>{const e=document.createElement(t);if(c)e.className=c;if(h!=null)e.innerHTML=h;return e;};
@@ -599,9 +604,10 @@ function whyLatePanel(v){
   </table>`;
   v.append(p);
 }
+const FC_MKS=['2026-07']; // ← add '2026-08' here once August reforecast dates are entered
 function forecastBanner(v){
   const M=MODEL;
-  const FC_MK='2026-07'; // ← filtered to the July baseline delivery bucket
+  FC_MKS.forEach(FC_MK=>{
   const x=(M.monthComplete||[]).find(y=>y.mk===FC_MK);
   if(!x||!x.fc)return;
   const bu=DATA.reports.filter(r=>M.bucketOf(r)===FC_MK);
@@ -621,6 +627,7 @@ function forecastBanner(v){
     </div>
     <p class="fc-note" style="margin:10px 0 0">${monLbl(FC_MK)}-bucket reports only. Each report's completion is its tracker DPO date where entered (Actual, else the later of Reforecast / Baseline), otherwise ✦ computed as QA completion + 7 workdays — whichever is later.${drv?` Driver: <b style="color:var(--text)">${esc(drv.name)}</b> <span style="color:var(--dim)">(${drv.fcComputed?'✦ ':''}${esc(drv.fcSrc||'')})</span>.`:''}</p>`;
   v.append(p);
+  });
 }
 function stageReason(r){
   if(r.blocked)return{k:'blocked',t:`⛔ Blocked — ${r.blockTarget} must fix`};
@@ -650,30 +657,36 @@ function reworksPanel(v){
     t.append(bd);rw.append(t);}
   v.append(rw);
 }
-let OUTSTAGE='';
+let OUTSTAGE='',OUTMONTH='';
 function outlookPanel(v){
   const M=MODEL,ol=el('div','panel');
   ol.innerHTML=`<h3>Expected handoffs & releases — ${winLabel()}</h3>
-  <p class="sub">Dates are each stage's <b>Reforecast where one exists, otherwise Base</b> — the tag on every row says which.</p>`;
+  <p class="sub">Dates are each stage's <b>Reforecast where one exists, otherwise Base</b> — the tag on every row says which. The ⏰ Overdue column shows handoffs whose date has already passed, regardless of the window.</p>`;
   const bar=el('div','mebar');
+  const mks=(M.monthComplete||[]).map(x=>x.mk);
   bar.innerHTML=`<label>Handoff <select id="stagePair"><option value="">all stages</option>
     ${['DB → PBI','PBI → QA','QA → DPO','Release'].map(o=>`<option ${o===OUTSTAGE?'selected':''}>${o}</option>`).join('')}</select></label>
+  <label>Delivery month <select id="mkOl"><option value="">all months</option>
+    ${mks.map(mk=>`<option value="${mk}" ${mk===OUTMONTH?'selected':''}>${monLbl(mk)}</option>`).join('')}</select></label>
   <label>Person <select id="whoOl"><option value="">everyone</option>
     ${M.people.map(pp=>`<option ${pp===PERSON2?'selected':''}>${esc(pp)}</option>`).join('')}</select></label>`;
   bar.append(windowCtl());ol.append(bar);
   bar.querySelector('#stagePair').onchange=e=>{OUTSTAGE=e.target.value;render();};
+  bar.querySelector('#mkOl').onchange=e=>{OUTMONTH=e.target.value;render();};
   bar.querySelector('#whoOl').onchange=e=>{PERSON2=e.target.value;render();};
-  const evts=M.outlook.filter(x=>inWin(x.d)
-    &&(!OUTSTAGE||x.label===OUTSTAGE)
-    &&(!PERSON2||x.stage.owner===PERSON2||x.r.stages.some(st=>st.owner===PERSON2)));
+  const match=x=>(!OUTSTAGE||x.label===OUTSTAGE)
+    &&(!OUTMONTH||M.bucketOf(x.r)===OUTMONTH)
+    &&(!PERSON2||x.stage.owner===PERSON2||x.r.stages.some(st=>st.owner===PERSON2));
+  const evts=M.outlook.filter(x=>inWin(x.d)&&match(x));
+  const lateEvts=M.outlook.filter(x=>x.d<M.T&&match(x));
   const grid=el('div','outlook');
   const buckets=HORIZON.mode==='days'&&HORIZON.days<=14
-    ?[['This week',x=>days(M.T,x.d)<7],['Next week',x=>days(M.T,x.d)>=7]]
-    :[['Earlier',(x,i)=>i<Math.ceil(evts.length/2)],['Later',(x,i)=>i>=Math.ceil(evts.length/2)]];
+    ?[['⏰ Overdue',null],['This week',x=>days(M.T,x.d)<7],['Next week',x=>days(M.T,x.d)>=7]]
+    :[['⏰ Overdue',null],['Earlier',(x,i)=>i<Math.ceil(evts.length/2)],['Later',(x,i)=>i>=Math.ceil(evts.length/2)]];
   buckets.forEach(([lbl,f])=>{
-    const c=el('div');c.innerHTML=`<p class="eyebrow">${lbl}</p>`;
-    const items=evts.filter(f);
-    if(!items.length)c.append(el('div','empty','Nothing scheduled.'));
+    const c=el('div');c.innerHTML=`<p class="eyebrow">${lbl}${f===null?` · ${lateEvts.length}`:''}</p>`;
+    const items=f===null?lateEvts:evts.filter(f);
+    if(!items.length)c.append(el('div','empty',f===null?'Nothing overdue. 🟢':'Nothing scheduled.'));
     items.forEach(x=>{const d=el('div','ol-item');
       const src=srcOf(x.stage);
       const lateTag=x.d<M.T?` <span class="chip red">⏰ ${days(x.d,M.T)}d late</span>`:'';
@@ -741,7 +754,7 @@ function dimTimeline(){
       +`<td class="tcell" style="background:#152238;color:var(--text);text-align:left">${merged}</td>`;bd.append(tr);});
   tb.append(bd);wrap.append(tb);p.append(wrap);
   bd.querySelectorAll('td.tcell[data-mk]').forEach(td=>{
-    const open=()=>{DRILL={type:'dim',dom:td.dataset.dom,mk:td.dataset.mk};render();
+    const open=()=>{DRILL={type:'dim',dom:td.dataset.dom,mk:td.dataset.mk};DRILLST='';render();
       setTimeout(()=>$('#drill')?.scrollIntoView?.({block:'nearest'}),0);};
     td.onclick=open;td.onkeydown=e=>{if(e.key==='Enter')open();};});
   bd.querySelectorAll('.estdrv[data-drv]').forEach(x=>x.onclick=e=>{e.stopPropagation();openReport(x.dataset.drv);});
@@ -771,7 +784,7 @@ function drilldownPanel(){
     else{inner=`<b>Est. completion:</b> nothing entered past Baseline yet.`;}
     return `<div style="margin:8px 0 4px;background:var(--amber-bg);color:var(--amber);border-radius:8px;padding:7px 11px;font-size:12.5px">${inner}</div>`;})()}
   <p class="sub">${type==='dim'?'<b>Days overdue</b> = days past the current stage\'s due date (the later of its Baseline and Reforecast Completion Dates) — nothing else. <b>Final completion</b> = the Baseline, and under it the <b style="color:var(--red)">Final forecasted date</b> — the tracker\'s DPO date where entered (Actual / Reforecast / Baseline), else ✦ computed as QA completion + 7 workdays; red = past the Baseline, with how many days late. 💬 = Comments column.':'Reports planned (Base) for this month, plus any actually released in it.'}</p>`;
-  p.querySelector('.mclose').onclick=()=>{DRILL=null;render();};
+  p.querySelector('.mclose').onclick=()=>{DRILL=null;DRILLST='';render();};
   const cmts=items.filter(r=>r.comments);
   const cntEl=p.querySelector('h3 .cnt');
   if(cntEl&&cmts.length)cntEl.insertAdjacentHTML('beforeend',` · 💬 ${cmts.length}`);
@@ -782,11 +795,25 @@ function drilldownPanel(){
       grp.forEach(r=>dg.insertAdjacentHTML('beforeend',
         `<div class="ol-item" style="align-items:flex-start"><span style="flex:0 0 220px;font-size:12px">${esc(r.name)}</span><span style="color:var(--muted);font-size:12px">${esc(r.comments)}</span></div>`));});
     p.append(dg);}
-  const t=el('table');t.innerHTML=`<thead><tr><th>Report</th><th>Current Status</th><th>Days overdue<span style="display:block;font-size:9px;font-weight:400;text-transform:none;letter-spacing:0">past the stage due — later of Baseline / Reforecast</span></th><th>Final completion Baseline — Final forecasted date</th></tr></thead>`;
+  const stList=[...new Set(items.map(r=>r.status))].sort((a,b)=>ORDER.indexOf(a)-ORDER.indexOf(b));
+  const shown=DRILLST?items.filter(r=>r.status===DRILLST):items;
+  const fbar=el('div','mebar');
+  const stBtn=(val,lbl,n)=>`<button data-st="${esc(val)}" class="${DRILLST===val?'on':''}">${esc(lbl)} <b>${n}</b></button>`;
+  fbar.innerHTML=`<span class="winbtns" style="flex-wrap:wrap">
+    ${stBtn('','All',items.length)}
+    ${stList.map(s=>stBtn(s,s,items.filter(r=>r.status===s).length)).join('')}</span>
+  <span style="color:var(--muted);font-size:12px" class="num">showing ${shown.length} of ${items.length} report${items.length===1?'':'s'}${DRILLST?` · <b style="color:var(--text)">${esc(DRILLST)}</b>`:''}</span>`;
+  fbar.querySelectorAll('[data-st]').forEach(b=>b.onclick=()=>{DRILLST=b.dataset.st;render();
+    setTimeout(()=>$('#drill')?.scrollIntoView?.({block:'nearest'}),0);});
+  p.append(fbar);
+  const t=el('table');t.innerHTML=`<thead><tr><th>Report</th><th>Current Status</th><th>Stage due date<span style="display:block;font-size:9px;font-weight:400;text-transform:none;letter-spacing:0">later of Baseline / Reforecast — red when passed</span></th><th>Final completion Baseline — Final forecasted date</th></tr></thead>`;
   const bd=el('tbody');
   const lateOf=r=>{if(r.released)return null;const g=r.curStage&&r.curStage.est?r.curStage.est:r.baseFinish;
     return g&&g<MODEL.T?{d:days(g,MODEL.T),src:r.curStage?srcOf(r.curStage):'Base'}:null;};
-  items.sort((a,b)=>((lateOf(b)?.d)||0)-((lateOf(a)?.d)||0)||((a.baseFinish||0)-(b.baseFinish||0))).forEach(r=>{
+  const dueOf=r=>{if(r.released)return null;
+    return r.curStage&&r.curStage.est?{d:r.curStage.est,src:srcOf(r.curStage)}
+      :r.baseFinish?{d:r.baseFinish,src:'Base'}:null;};
+  shown.sort((a,b)=>((lateOf(b)?.d)||0)-((lateOf(a)?.d)||0)||((a.baseFinish||0)-(b.baseFinish||0))).forEach(r=>{
     const tr=el('tr','rowlink');tr.tabIndex=0;
     const lt=lateOf(r);
     const openRw=(MODEL.rwByReport[r.name]||[]).some(w2=>!w2.resolved);
@@ -799,7 +826,12 @@ function drilldownPanel(){
 
     tr.innerHTML=`<td>${esc(r.name)}<div style="color:var(--dim);font-size:11px">${esc(r.domain)}${badge?' · ':''}${badge}</div>${cmt}</td>
       <td>${esc(r.status)}</td>
-      <td class="num">${lt?`<span class="chip ${lt.d>3?'red':'amber'}">${lt.d>3?'⏰':'🟠'} ${lt.d}d</span>`:(r.released?'—':'<span class="chip green">on plan</span>')}</td>
+      <td class="num">${(()=>{const g=dueOf(r);
+        if(r.released)return '—';
+        if(!g)return '<span class="chip dim">no date</span>';
+        if(g.d<MODEL.T){const n=days(g.d,MODEL.T);
+          return `<span class="chip ${n>3?'red':'amber'}">${n>3?'⏰':'🟠'} ${fmtD(g.d)} · ${g.src} · ${n}d late</span>`;}
+        return `<span class="two-clock"><span class="est">${fmtD(g.d)} · ${g.src}</span></span>`;})()}</td>
       <td>${fin}</td>`;
     tr.onclick=()=>openReport(r.name);tr.onkeydown=e=>{if(e.key==='Enter')openReport(r.name);};
     bd.append(tr);});
